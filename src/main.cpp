@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2014, Push Chen
  * All rights reserved.
- * File Name         : dns.cpp
+ * File Name         : main.cpp
  * Author            : Push Chen
  * Date              : 2014-06-20
 */
@@ -43,6 +43,21 @@
 #include "config.h"
 #include "dns.h"
 
+void _cleandns_version_info() {
+
+}
+
+void _cleandns_help_info() {
+
+}
+
 int main( int argc, char *argv[] ) {
     return 0;
 }
+
+/*
+ Push Chen.
+ littlepush@gmail.com
+ http://pushchen.com
+ http://twitter.com/littlepush
+ */
