@@ -42,6 +42,53 @@
 
 #include "config.h"
 #include "dns.h"
+#include "lock.h"
+#include <fstream>
+
+#if _DEF_WIN32
+void set_signal_handler( ) {
+}
+void wait_for_exit_signal( )
+{
+    char _c = getc( );
+}
+#else
+// Global Signal
+struct __global_signal {
+    static cleandns_semaphore & __wait_sem( ) {
+        static cleandns_semaphore _sem(0, 1);
+        return _sem;
+    }
+};
+
+void __handle_signal( int _sig ) {
+    if (SIGTERM == _sig || SIGINT == _sig || SIGQUIT == _sig) {
+        __global_signal::__wait_sem().give();          
+    }
+}
+void set_signal_handler( ) {
+    // Hook the signal
+#ifdef __APPLE__
+    signal(SIGINT, __handle_signal);
+#else
+    sigset_t sgset, osgset;
+    sigfillset(&sgset);
+    sigdelset(&sgset, SIGTERM);
+    sigdelset(&sgset, SIGINT);
+    sigdelset(&sgset, SIGQUIT);
+    sigdelset(&sgset, 11);
+    sigprocmask(SIG_SETMASK, &sgset, &osgset);
+    signal(SIGTERM, __handle_signal);
+    signal(SIGINT, __handle_signal);
+    signal(SIGQUIT, __handle_signal);    
+#endif      
+}
+void wait_for_exit_signal( )
+{
+    // Wait for exit signal
+    __global_signal::__wait_sem().get( );     
+}
+#endif
 
 void _cleandns_version_info() {
     printf( "cleandns version: %s\n", VERSION );
@@ -129,7 +176,7 @@ int main( int argc, char *argv[] ) {
                 continue;
             }
             if ( _command == "--server" ) {
-                _is_server == true;
+                _is_server = true;
             }
             cerr << "Invalidate argument: " << _command << "." << endl;
             return 1;
@@ -160,12 +207,29 @@ int main( int argc, char *argv[] ) {
         return 3;
     }
 
-    cout << "Filter File: " << _filter_list_file << endl;
-    cout << "Server Port: " << _server_port << endl;
-    cout << "Server Address: " << _server_address << endl;
-    cout << "Local Address: " << _local_address << endl;
-    cout << "Is Client: " << _is_client << endl;
-    cout << "is Server: " << _is_server << endl;
+    set_signal_handler();
+
+    if ( _is_client ) {
+        // Try to read each line in the filter list.
+        ifstream _filter_stream;
+        _filter_stream.open(_filter_list_file);
+        if ( _filter_stream ) {
+            string _pattern_line;
+            while ( _filter_stream.eof() == false ) {
+                getline( _filter_stream, _pattern_line );
+                _pattern_line = trim(_pattern_line);
+                if ( _pattern_line.size() == 0 ) continue;
+                dns_add_filter_pattern( _pattern_line );
+            }
+            _filter_stream.close();
+        }
+    } else {
+
+    }
+
+    // Wait for close signal and exit
+    wait_for_exit_signal();
+    exit(0);
 
     return 0;
 }

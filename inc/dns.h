@@ -92,6 +92,37 @@ struct filter_list_node
     filter_list_node() : everything(NULL) {}
 };
 
+// trim from start
+static inline std::string &ltrim(std::string &s) {
+    s.erase(
+        s.begin(), 
+        std::find_if(
+            s.begin(), 
+            s.end(), 
+            std::not1(std::ptr_fun<int, int>(std::isspace))
+            )
+        );
+    return s;
+}
+
+// trim from end
+static inline std::string &rtrim(std::string &s) {
+    s.erase(
+        std::find_if(
+            s.rbegin(), 
+            s.rend(), 
+            std::not1(std::ptr_fun<int, int>(std::isspace))
+            ).base(), 
+        s.end()
+        );
+    return s;
+}
+
+// trim from both ends
+static inline std::string &trim(std::string &s) {
+    return ltrim(rtrim(s));
+}
+
 // Get the domain from the dns querying package.
 // The query domain seg will store the domain in the following format:
 // [length:1Byte][component][length:1Byte][component]...

@@ -7,7 +7,7 @@ CLEANDNS_ROOT = ./
 OUT_DIR = $(CLEANDNS_ROOT)/result
 
 CLEANDNS_DEFINES = -DVERSION=\"$(shell ./version)\" -DTARGET=\"$(shell gcc -v 2> /dev/stdout | grep Target | cut -d ' ' -f 2)\"
-THIRDPARTY = -I./inc
+THIRDPARTY = -I./inc -pthread
 
 ifeq "$(MAKECMDGOALS)" "release"
 	DEFINES = $(CLEANDNS_DEFINES) $(THIRDPARTY) -DCLEANDNS_RELEASE -DRELEASE
@@ -21,13 +21,6 @@ else
 		CPPFLAGS = 
 		CFLAGS = -g -pg -Wall $(DEFINES) -fPIC -pthread
 		CXXFLAGS = -g -pg -Wall $(DEFINES) -fPIC -pthread
-		CMDGOAL_DEF := $(MAKECMDGOALS)
-	endif
-	ifeq "$(MAKECMDGOALS)" "debug"
-		DEFINES = $(CLEANDNS_DEFINES) $(THIRDPARTY) -DCLEAN_DEBUG -DDEBUG
-		CPPFLAGS = 
-		CFLAGS = -g -Wall $(DEFINES) -fPIC -pthread
-		CXXFLAGS = -g -Wall $(DEFINES) -fPIC -pthread
 		CMDGOAL_DEF := $(MAKECMDGOALS)
 	else
 		DEFINES = $(CLEANDNS_DEFINES) $(THIRDPARTY) -DCLEAN_DEBUG -DDEBUG
@@ -102,5 +95,5 @@ withpg : PreProcess $(STATIC_LIBS) $(DYNAMIC_LIBS) $(EXECUTABLE) $(TEST_CASE) Af
 	$(CC) $(CXXFLAGS) -c -o $@ $<
 
 cleandns : $(OBJ_FILES)
-	$(CC) -o $@ $^
+	$(CC) -o $@ $^ -pthread
 
