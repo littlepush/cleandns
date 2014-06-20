@@ -43,6 +43,7 @@
 #include "config.h"
 #include "dns.h"
 #include "lock.h"
+#include "thread.h"
 #include <fstream>
 
 #if _DEF_WIN32
@@ -89,6 +90,30 @@ void wait_for_exit_signal( )
     __global_signal::__wait_sem().get( );     
 }
 #endif
+
+void cleandns_udp_client_worker( cleandns_thread *thread )
+{
+    while( thread->thread_status() ) {
+        sleep( 1 );
+        cout << "client udp worker running" << endl;
+    }
+}
+
+void cleandns_tcp_client_worker( cleandns_thread *thread )
+{
+    while( thread->thread_status() ) {
+        sleep( 1 );
+        cout << "client udp worker running" << endl;
+    }
+}
+
+void cleandns_tcp_server_worker( cleandns_thread *thread )
+{
+    while( thread->thread_status() ) {
+        sleep( 1 );
+        cout << "server tcp worker running" << endl;
+    }
+}
 
 void _cleandns_version_info() {
     printf( "cleandns version: %s\n", VERSION );
@@ -208,11 +233,14 @@ int main( int argc, char *argv[] ) {
     }
 
     set_signal_handler();
+    cleandns_thread *_client_udp_worker_thread = NULL;
+    cleandns_thread *_client_tcp_worker_thread = NULL;
+    cleandns_thread *_server_tcp_worker_thread = NULL;
 
     if ( _is_client ) {
         // Try to read each line in the filter list.
         ifstream _filter_stream;
-        _filter_stream.open(_filter_list_file);
+        _filter_stream.open(_filter_list_file.c_str(), ios_base::in);
         if ( _filter_stream ) {
             string _pattern_line;
             while ( _filter_stream.eof() == false ) {
@@ -223,12 +251,24 @@ int main( int argc, char *argv[] ) {
             }
             _filter_stream.close();
         }
+
+        //cleandns_udp_client_worker
+        _client_udp_worker_thread = new cleandns_thread( cleandns_udp_client_worker );
+        _client_udp_worker_thread->start_thread();
+
     } else {
 
     }
 
     // Wait for close signal and exit
     wait_for_exit_signal();
+    if ( _is_client ) {
+        if ( _client_udp_worker_thread ) _client_udp_worker_thread->stop_thread();
+        if ( _client_tcp_worker_thread ) _client_tcp_worker_thread->stop_thread();
+    } else {
+        if ( _server_tcp_worker_thread ) _server_tcp_worker_thread->stop_thread();
+    }
+
     exit(0);
 
     return 0;

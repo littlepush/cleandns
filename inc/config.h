@@ -109,6 +109,7 @@
 #include <list>
 #include <map>
 #include <vector>
+#include <algorithm>
 
 // Socket Including file in Windows must in a specified order.
 #if _DEF_WIN32
@@ -125,6 +126,7 @@
 #if _DEF_LINUX
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <signal.h>
 #define gettid()    syscall(__NR_gettid)
 #endif
 
@@ -187,6 +189,37 @@ typedef enum { False = 0, True = 1 } Boolean;
 #define PLIB_LOG_FORMAT_SIMPLE  UNICODE_("[%s][%u][%s][%d]")
 // Log Postfix Fomat: [YYYY-mm-dd-HH-MM-SS]
 #define PLIB_TIME_FORMAT_POSTFIX UNICODE_("%04d-%02d-%02d-%02d-%02d-%02d")
+
+// trim from start
+static inline std::string &ltrim(std::string &s) {
+    s.erase(
+        s.begin(), 
+        std::find_if(
+            s.begin(), 
+            s.end(), 
+            std::not1(std::ptr_fun<int, int>(std::isspace))
+            )
+        );
+    return s;
+}
+
+// trim from end
+static inline std::string &rtrim(std::string &s) {
+    s.erase(
+        std::find_if(
+            s.rbegin(), 
+            s.rend(), 
+            std::not1(std::ptr_fun<int, int>(std::isspace))
+            ).base(), 
+        s.end()
+        );
+    return s;
+}
+
+// trim from both ends
+static inline std::string &trim(std::string &s) {
+    return ltrim(rtrim(s));
+}
 
 #endif // cleandns.config.h
 
