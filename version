@@ -1,0 +1,8 @@
+#! /bin/bash
+
+v=`git describe --tags 2>/dev/null`
+if [ $? -ne 0 ]; then 
+    echo 0.1
+else 
+    echo $v
+fi
