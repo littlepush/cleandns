@@ -158,6 +158,49 @@ void cleandns_udp_client_worker( cleandns_thread **thread )
     }
 }
 
+void cleandns_tcp_client_redirector( cleandns_thread **thread )
+{
+    cleandns_tcpsocket *_client_socket = (cleandns_tcpsocket *)(*thread)->user_info;
+    if ( _client_socket == NULL ) {
+        delete (*thread);
+        *thread = NULL;
+        return;
+    }
+
+    do {
+        string _buffer;
+        if ( !_client_socket->read_data( _buffer, 3000 ) ) break;
+        string _domain;
+        int _ret = dns_get_domain(_buffer.c_str(), _buffer.size(), _domain);
+        if ( _ret != 0 ) {
+            cerr << "cleandns: failed to get domain info from the package.";
+            break;
+        }
+        bool _is_filter_domain = domain_match_filter( _domain );
+        if ( _is_filter_domain ) {
+            cleandns_tcpsocket _re_socket;
+            if ( !_re_socket.connect( _server_address, _server_port) ) break;
+            if ( !_re_socket.write_data(_buffer) ) break;
+            if ( !_re_socket.read_data(_buffer, 5000) ) break;
+            _re_socket.close();
+
+            _client_socket->write_data(_buffer);
+        } else {
+            // Redirect to local server use udp
+            cleandns_udpsocket _re_socket;
+            if ( !_re_socket.connect( _local_address, 53 ) ) break;
+            if ( !_re_socket.write_data(_buffer) ) break;
+            if ( !_re_socket.read_data(_buffer, 3000) ) break;
+            _re_socket.close();
+
+            _client_socket->write_data(_buffer);
+        }
+    } while ( false );
+
+    delete _client_socket;
+    delete (*thread);
+    *thread = NULL;
+}
 void cleandns_tcp_client_worker( cleandns_thread **thread )
 {
     cleandns_tcpsocket _tcp_svr_so;
@@ -168,18 +211,50 @@ void cleandns_tcp_client_worker( cleandns_thread **thread )
     while( (*thread)->thread_status() ) {
         cleandns_tcpsocket *_client = _tcp_svr_so.get_client();
         if ( _client == NULL ) continue;
-        string _buffer;
-        _client->read_data(_buffer);
-        cout << _buffer << endl;
-        delete _client;
+        cleandns_thread *_redirect_thread = new cleandns_thread(cleandns_tcp_client_redirector);
+        _redirect_thread->user_info = _client;
+        _redirect_thread->start_thread();
     }
 }
 
+void cleandns_tcp_server_redirector( cleandns_thread **thread )
+{
+    cleandns_tcpsocket *_client_socket = (cleandns_tcpsocket *)(*thread)->user_info;
+    if ( _client_socket == NULL ) {
+        delete (*thread);
+        *thread = NULL;
+        return;
+    }
+
+    do {
+        string _buffer;
+        if ( !_client_socket->read_data( _buffer, 3000 ) ) break;
+        cleandns_udpsocket _re_socket;
+        if ( !_re_socket.connect( _local_address, 53 ) ) break;
+        if ( !_re_socket.write_data(_buffer) ) break;
+        if ( !_re_socket.read_data(_buffer, 3000) ) break;
+        _re_socket.close();
+
+        _client_socket->write_data(_buffer);
+    } while ( false );
+
+    delete _client_socket;
+    delete (*thread);
+    *thread = NULL;
+}
 void cleandns_tcp_server_worker( cleandns_thread **thread )
 {
+    cleandns_tcpsocket _tcp_svr_so;
+    if ( !_tcp_svr_so.listen(_server_port) ) {
+        cerr << "cleandns: failed to listen on " << _server_port << "." << endl;
+        exit(3);
+    }
     while( (*thread)->thread_status() ) {
-        sleep( 1 );
-        cout << "server tcp worker running" << endl;
+        cleandns_tcpsocket *_client = _tcp_svr_so.get_client();
+        if ( _client == NULL ) continue;
+        cleandns_thread *_redirect_thread = new cleandns_thread(cleandns_tcp_server_redirector);
+        _redirect_thread->user_info = _client;
+        _redirect_thread->start_thread();
     }
 }
 
@@ -324,7 +399,9 @@ int main( int argc, char *argv[] ) {
         _client_tcp_worker_thread = new cleandns_thread( cleandns_tcp_client_worker );
         _client_tcp_worker_thread->start_thread();
     } else {
-
+        if ( _local_address == "202.96.209.133" ) _local_address = "8.8.8.8";
+        _server_tcp_worker_thread = new cleandns_thread( cleandns_tcp_server_worker );
+        _server_tcp_worker_thread->start_thread();
     }
 
     // Wait for close signal and exit
