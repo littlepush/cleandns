@@ -50,7 +50,7 @@ cleandns_thread::cleandns_thread( thread_job_t job )
 }
 cleandns_thread::~cleandns_thread()
 {
-    this->stop_thread( );
+    this->stop_thread( false );
 }
 // Status
 bool cleandns_thread::thread_status()

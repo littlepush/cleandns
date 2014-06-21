@@ -48,6 +48,11 @@
 #include "udpsocket.h"
 #include <fstream>
 
+// Global Parameters
+string _server_address = "127.0.0.1";
+unsigned int _server_port = 11025;
+string _local_address = "202.96.209.133";
+
 #if _DEF_WIN32
 void set_signal_handler( ) {
 }
@@ -95,6 +100,42 @@ void wait_for_exit_signal( )
 
 void cleandns_udp_client_redirector( cleandns_thread *thread )
 {
+    cleandns_udpsocket *_client_socket = (cleandns_udpsocket *)thread->user_info;
+    if ( _client_socket == NULL ) {
+        delete thread;
+        return;
+    }
+
+    do {
+        string _domain;
+        int _ret = dns_get_domain(_client_socket->m_data.c_str(), _client_socket->m_data.size(), _domain);
+        if ( _ret != 0 ) {
+            cerr << "cleandns: failed to get domain info from the package.";
+            break;
+        }
+        bool _is_filter_domain = domain_match_filter( _domain );
+        if ( _is_filter_domain ) {
+            cleandns_tcpsocket _re_socket;
+            if ( !_re_socket.connect( _server_address, _server_port) ) break;
+            if ( !_re_socket.write_data(_client_socket->m_data) ) break;
+            if ( !_re_socket.read_data(_client_socket->m_data, 5000) ) break;
+            _re_socket.close();
+
+            _client_socket->write_data(_client_socket->m_data);
+        } else {
+            // Redirect to local server use udp
+            cleandns_udpsocket _re_socket;
+            if ( !_re_socket.connect( _local_address, 53 ) ) break;
+            if ( !_re_socket.write_data(_client_socket->m_data) ) break;
+            if ( !_re_socket.read_data(_client_socket->m_data, 3000) ) break;
+            _re_socket.close();
+
+            _client_socket->write_data(_client_socket->m_data);
+        }
+    } while ( false );
+
+    // Release result
+    delete _client_socket;
     delete thread;
 }
 
@@ -160,9 +201,6 @@ void _cleandns_help_info() {
 int main( int argc, char *argv[] ) {
     const char *_home_path = getenv("HOME");
     string _filter_list_file = string(_home_path) + "/.cleandns.filter";
-    string _server_address = "127.0.0.1";
-    unsigned int _server_port = 11025;
-    string _local_address = "202.96.209.133";
     bool _is_client = false;
     bool _is_server = false;
 
