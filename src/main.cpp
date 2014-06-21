@@ -44,6 +44,8 @@
 #include "dns.h"
 #include "lock.h"
 #include "thread.h"
+#include "tcpsocket.h"
+#include "udpsocket.h"
 #include <fstream>
 
 #if _DEF_WIN32
@@ -95,15 +97,24 @@ void cleandns_udp_client_worker( cleandns_thread *thread )
 {
     while( thread->thread_status() ) {
         sleep( 1 );
-        cout << "client udp worker running" << endl;
+        // cout << "client udp worker running" << endl;
     }
 }
 
 void cleandns_tcp_client_worker( cleandns_thread *thread )
 {
+    cleandns_tcpsocket _tcp_svr_so;
+    if ( !_tcp_svr_so.listen( 53 ) ) {
+        cerr << "cleandns: failed to listen on 53 for tcp worker." << endl;
+        exit(1);
+    }
     while( thread->thread_status() ) {
-        sleep( 1 );
-        cout << "client udp worker running" << endl;
+        cleandns_tcpsocket *_client = _tcp_svr_so.get_client();
+        if ( _client == NULL ) continue;
+        string _buffer;
+        _client->read_data(_buffer);
+        cout << _buffer << endl;
+        delete _client;
     }
 }
 
@@ -256,6 +267,8 @@ int main( int argc, char *argv[] ) {
         _client_udp_worker_thread = new cleandns_thread( cleandns_udp_client_worker );
         _client_udp_worker_thread->start_thread();
 
+        _client_tcp_worker_thread = new cleandns_thread( cleandns_tcp_client_worker );
+        _client_tcp_worker_thread->start_thread();
     } else {
 
     }

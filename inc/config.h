@@ -221,6 +221,8 @@ static inline std::string &trim(std::string &s) {
     return ltrim(rtrim(s));
 }
 
+using namespace std;
+
 #endif // cleandns.config.h
 
 /*

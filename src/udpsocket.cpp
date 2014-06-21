@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2014, Push Chen
  * All rights reserved.
- * File Name         : thread.h
+ * File Name         : udpsocket.cpp
  * Author            : Push Chen
  * Date              : 2014-06-20
 */
@@ -40,64 +40,8 @@
     ENJOY YOUR LIFE AND BE FAR AWAY FROM BUGS.
 */
 
-#pragma once
-
-#ifndef __CLEAN_DNS_THREAD_H__
-#define __CLEAN_DNS_THREAD_H__
-
-#include "config.h"
-#include "lock.h"
-
-#if _DEF_WIN32
-typedef long        thread_handle;
-typedef long        thread_id_t;
-typedef Uint32      thread_return_t;
-
-#define _THREAD_CALLBACK    __stdcall
-#else
-typedef int         thread_handle;
-typedef pthread_t   thread_id_t;
-typedef void *      thread_return_t;
-
-#define _THREAD_CALLBACK
-#endif
-
-class cleandns_thread;
-typedef void (*thread_job_t)( cleandns_thread *thread );
-
-// Thread Utility (Lite Version)
-class cleandns_thread
-{
-protected:
-    thread_handle           m_thread_handler;
-    thread_id_t             m_thread_id;
-    volatile bool           m_thread_status;
-    cleandns_mutex          m_running_mutex;
-    cleandns_semaphore      m_thread_sync_sem;
-
-    thread_job_t            m_job;
-public:
-
-    void                    *user_info;
-    // Create a thread with job function
-    cleandns_thread( thread_job_t job );
-    ~cleandns_thread();
-
-    // Status
-    bool thread_status();
-
-    // Thread control
-    bool start_thread();
-    bool stop_thread( bool wait_until_exit = true );
-
-protected:
-
-    // Global thread callback function.
-    static thread_return_t _THREAD_CALLBACK _thread_main( void *param );
-};
-
-#endif
-
+#include "udpsocket.h"
+    
 /*
  Push Chen.
  littlepush@gmail.com
