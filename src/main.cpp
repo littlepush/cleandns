@@ -93,18 +93,32 @@ void wait_for_exit_signal( )
 }
 #endif
 
+void cleandns_udp_client_redirector( cleandns_thread *thread )
+{
+    delete thread;
+}
+
 void cleandns_udp_client_worker( cleandns_thread *thread )
 {
+    cleandns_udpsocket _udp_svr_so;
+    if ( !_udp_svr_so.listen(53) ) {
+        sleep(1);
+        cerr << "cleandns: failed to listen on 53 for udp worker." << endl;
+        exit(2);
+    }
     while( thread->thread_status() ) {
-        sleep( 1 );
-        // cout << "client udp worker running" << endl;
+        cleandns_udpsocket *_client = _udp_svr_so.get_client();
+        if ( _client == NULL ) continue;
+        cleandns_thread *_redirect_thread = new cleandns_thread(cleandns_udp_client_redirector);
+        _redirect_thread->user_info = _client;
+        _redirect_thread->start_thread();
     }
 }
 
 void cleandns_tcp_client_worker( cleandns_thread *thread )
 {
     cleandns_tcpsocket _tcp_svr_so;
-    if ( !_tcp_svr_so.listen( 53 ) ) {
+    if ( !_tcp_svr_so.listen(53) ) {
         cerr << "cleandns: failed to listen on 53 for tcp worker." << endl;
         exit(1);
     }

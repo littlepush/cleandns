@@ -40,6 +40,44 @@
     ENJOY YOUR LIFE AND BE FAR AWAY FROM BUGS.
 */
 
+#include "config.h"
+#include "socket.h"
+
+// UDP socket
+class cleandns_udpsocket
+{
+protected:
+    char m_buffer[1024];
+public:
+    // The socket handler
+    SOCKET_T m_socket;
+    SOCKET_T m_parent; 
+    struct sockaddr_in m_sock_addr;
+    socklen_t m_so_len;
+    string m_data;
+
+    cleandns_udpsocket();
+    ~cleandns_udpsocket();
+
+    // Connect to peer
+    bool connect( const string &ipaddr, u_int32_t port );
+    // Listen on specified port and address, default is 0.0.0.0
+    bool listen( u_int32_t port, u_int32_t ipaddr = INADDR_ANY );
+    // Close the connection
+    void close();
+    // When the socket is a listener, use this method 
+    // to accept client's connection.
+    cleandns_udpsocket *get_client( u_int32_t timeout = 100 );
+
+    // Set current socket reusable or not
+    bool set_reusable( bool reusable = true );
+
+    // Read data from the socket until timeout or get any data.
+    bool read_data( string &buffer, u_int32_t timeout = 1000 );
+    // Write data to peer.
+    bool write_data( const string &data );
+};
+
 /*
  Push Chen.
  littlepush@gmail.com
