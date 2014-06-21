@@ -14,10 +14,10 @@ We can put a '*' in any part of the domain.
 
 Usage
 ========
-Default server port is 11025
+Default remote port is 11025
 * Client
 
-    `cleandns --client --filter <file> --server <server> --port <port> --local <dns>`
+    `cleandns --client --filter <file> --remote <remote> --port <port> --local <dns>`
 
 * Server
 
@@ -26,7 +26,7 @@ Default server port is 11025
 Example
 ========
 
-    cleandns --client --filter ./filter.list --server <your_server_ip> --local 202.96.209.133
+    cleandns --client --filter ./filter.list --remote <your_server_ip> --local 202.96.209.133
     cleandns --server --local 8.8.8.8
 
 Version Log

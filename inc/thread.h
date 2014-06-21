@@ -63,7 +63,7 @@ typedef void *      thread_return_t;
 #endif
 
 class cleandns_thread;
-typedef void (*thread_job_t)( cleandns_thread *thread );
+typedef void (*thread_job_t)( cleandns_thread **thread );
 
 // Thread Utility (Lite Version)
 class cleandns_thread

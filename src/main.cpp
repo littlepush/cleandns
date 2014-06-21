@@ -98,11 +98,12 @@ void wait_for_exit_signal( )
 }
 #endif
 
-void cleandns_udp_client_redirector( cleandns_thread *thread )
+void cleandns_udp_client_redirector( cleandns_thread **thread )
 {
-    cleandns_udpsocket *_client_socket = (cleandns_udpsocket *)thread->user_info;
+    cleandns_udpsocket *_client_socket = (cleandns_udpsocket *)(*thread)->user_info;
     if ( _client_socket == NULL ) {
-        delete thread;
+        delete (*thread);
+        *thread = NULL;
         return;
     }
 
@@ -136,10 +137,11 @@ void cleandns_udp_client_redirector( cleandns_thread *thread )
 
     // Release result
     delete _client_socket;
-    delete thread;
+    delete (*thread);
+    *thread = NULL;
 }
 
-void cleandns_udp_client_worker( cleandns_thread *thread )
+void cleandns_udp_client_worker( cleandns_thread **thread )
 {
     cleandns_udpsocket _udp_svr_so;
     if ( !_udp_svr_so.listen(53) ) {
@@ -147,7 +149,7 @@ void cleandns_udp_client_worker( cleandns_thread *thread )
         cerr << "cleandns: failed to listen on 53 for udp worker." << endl;
         exit(2);
     }
-    while( thread->thread_status() ) {
+    while( (*thread)->thread_status() ) {
         cleandns_udpsocket *_client = _udp_svr_so.get_client();
         if ( _client == NULL ) continue;
         cleandns_thread *_redirect_thread = new cleandns_thread(cleandns_udp_client_redirector);
@@ -156,14 +158,14 @@ void cleandns_udp_client_worker( cleandns_thread *thread )
     }
 }
 
-void cleandns_tcp_client_worker( cleandns_thread *thread )
+void cleandns_tcp_client_worker( cleandns_thread **thread )
 {
     cleandns_tcpsocket _tcp_svr_so;
     if ( !_tcp_svr_so.listen(53) ) {
         cerr << "cleandns: failed to listen on 53 for tcp worker." << endl;
         exit(1);
     }
-    while( thread->thread_status() ) {
+    while( (*thread)->thread_status() ) {
         cleandns_tcpsocket *_client = _tcp_svr_so.get_client();
         if ( _client == NULL ) continue;
         string _buffer;
@@ -173,9 +175,9 @@ void cleandns_tcp_client_worker( cleandns_thread *thread )
     }
 }
 
-void cleandns_tcp_server_worker( cleandns_thread *thread )
+void cleandns_tcp_server_worker( cleandns_thread **thread )
 {
-    while( thread->thread_status() ) {
+    while( (*thread)->thread_status() ) {
         sleep( 1 );
         cout << "server tcp worker running" << endl;
     }
@@ -193,7 +195,7 @@ void _cleandns_help_info() {
     printf( "cleandns --server --port <port> --local <dns>\n");
     printf( "options: \n" );
     printf( "    --filter|-f        The filter file path\n" );
-    printf( "    --server|-s        Server side address for proxy\n" );
+    printf( "    --remote|-r        Remote side address for proxy\n" );
     printf( "    --port|-p          Server side port for proxy\n" );
     printf( "    --local|-l         Local parent dns address\n" );
 }

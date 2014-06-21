@@ -106,8 +106,9 @@ thread_return_t _THREAD_CALLBACK cleandns_thread::_thread_main( void *param )
     _pcd_thread->m_thread_sync_sem.give();
 
     // Invoke the job
-    _pcd_thread->m_job( _pcd_thread );
+    _pcd_thread->m_job( &_pcd_thread );
 
+    if ( _pcd_thread == NULL ) return 0;
     // Stop the thread
     if ( _pcd_thread->m_thread_id == 0 ) return 0;
 #if _DEF_WIN32
