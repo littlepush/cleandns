@@ -189,7 +189,7 @@ void _cleandns_version_info() {
 
 void _cleandns_help_info() {
     _cleandns_version_info();
-    printf( "cleandns --client --filter <file> --server <server> --port <port> --local <dns>\n");
+    printf( "cleandns --client --filter <file> --remote <remote> --port <port> --local <dns>\n");
     printf( "cleandns --server --port <port> --local <dns>\n");
     printf( "options: \n" );
     printf( "    --filter|-f        The filter file path\n" );
@@ -236,7 +236,7 @@ int main( int argc, char *argv[] ) {
                 }
                 continue;
             }
-            if ( _command == "-s" || _command == "--server" ) {
+            if ( _command == "-r" || _command == "--remote" ) {
                 if ( _arg + 1 < argc ) {
                     _server_address = argv[++_arg];
                 } else {
