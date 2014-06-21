@@ -342,6 +342,7 @@ int main( int argc, char *argv[] ) {
             }
             if ( _command == "--server" ) {
                 _is_server = true;
+				continue;
             }
             cerr << "Invalidate argument: " << _command << "." << endl;
             return 1;
