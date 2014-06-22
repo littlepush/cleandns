@@ -41,9 +41,10 @@
 */
 
 #include "tcpsocket.h"
+#include <memory>
 
 cleandns_tcpsocket::cleandns_tcpsocket()
-:_svrfd(NULL), m_socket(INVALIDATE_SOCKET)
+:_svrfd(NULL), m_is_connected_to_proxy(false), m_socket(INVALIDATE_SOCKET)
 {
     // Nothing
 }
@@ -53,7 +54,7 @@ cleandns_tcpsocket::~cleandns_tcpsocket()
 }
 
 // Connect to peer
-bool cleandns_tcpsocket::connect( const string &ipaddr, u_int32_t port )
+bool cleandns_tcpsocket::_internal_connect( const string &ipaddr, u_int32_t port )
 {
     if ( ipaddr.size() == 0 || port == 0 || port >= 65535 ) return false;
     
@@ -128,6 +129,148 @@ bool cleandns_tcpsocket::connect( const string &ipaddr, u_int32_t port )
     CLEANDNS_NETWORK_IOCTL_CALL(m_socket, FIONBIO, &_u);
 
     return true;
+}
+
+bool cleandns_tcpsocket::setup_proxy( const string &socks5_addr, u_int32_t socks5_port )
+{
+    // Build a connection to the proxy server
+    if ( ! this->_internal_connect( socks5_addr, socks5_port ) ) return false;
+
+    char _buffer[3], _recv_buffer[2];
+
+    // Set up sending information to the socks proxy
+    _buffer[0] = 0x05;           /* VER */
+    _buffer[1] = 0x01;           /* NMETHODS */
+    _buffer[2] = 0x00;           /* METHODS */
+
+    // Exchange version info
+    if (write(m_socket, &_buffer, sizeof(_buffer)) < 0) {
+        this->close();
+        return false;
+    }
+
+    if (read(m_socket, &_recv_buffer, sizeof(_recv_buffer)) == -1) {
+        this->close();
+        return false;
+    }
+
+    // Now we just support NO AUTH for the socks proxy.
+    // So if the server doesn't support it, we will disconnect
+    // from the server.
+    if (_recv_buffer[1] != 0x00) {
+        cerr << "Unsupported Authentication Method";
+        this->close();
+        return false;
+    }
+
+    // Now we has connected to the proxy server.
+    m_is_connected_to_proxy = true;
+    return true;
+}
+
+bool cleandns_tcpsocket::connect( const string &ipaddr, u_int32_t port )
+{
+    if ( m_is_connected_to_proxy == false ) {
+        return this->_internal_connect( ipaddr, port );
+    } else {
+        // Establish a connection through the proxy server.
+        char _buffer[512], *_temp, _redv_buffer[256];
+        // Socks info
+        u_int8_t version = 0x05, cmd = 0x01, rsv = 0x00, atyp = 0x03;
+        u_int8_t _host_len = (u_int8_t)ipaddr.size();
+        u_int16_t _host_port = (u_int16_t)port; // the port must be uint16
+
+        _temp = _buffer;
+
+        /* Assemble the request packet */
+        memcpy(_temp, &version, sizeof (version));
+        _temp += sizeof (version);
+        memcpy(_temp, &cmd, sizeof (cmd));
+        _temp += sizeof (cmd);
+        memcpy(_temp, &rsv, sizeof (rsv));
+        _temp += sizeof (rsv);
+        memcpy(_temp, &atyp, sizeof (atyp));
+        _temp += sizeof (atyp);
+        memcpy(_temp, &_host_len, sizeof(_host_len));
+        _temp += sizeof (_host_len);
+        memcpy(_temp, ipaddr.c_str(), ipaddr.size());
+        _temp += ipaddr.size();
+        memcpy(_temp, &_host_port, sizeof(_host_port));
+        _temp += sizeof (_host_port);
+
+        if (write(m_socket, _buffer, _temp - _buffer) == -1) {
+            return false;
+        }
+
+        /*
+         * The maximum size of the protocol message we are waiting for is 10
+         * bytes -- VER[1], REP[1], RSV[1], ATYP[1], BND.ADDR[4] and
+         * BND.PORT[2]; see RFC 1928, section "6. Replies" for more details.
+         * Everything else is already a part of the data we are supposed to
+         * deliver to the requester. We know that BND.ADDR is exactly 4 bytes
+         * since as you can see below, we accept only ATYP == 1 which specifies
+         * that the IPv4 address is in a binary format.
+         */
+        if (read(m_socket, &_redv_buffer, 10) == -1) {
+            return false;
+        }
+
+        /* temp now points to the recieve buffer. */
+        _temp = _redv_buffer;
+
+        /* Check the server's version. */
+        if (*_temp++ != 0x05) {
+            (void)fprintf(stderr, "Unsupported SOCKS version: %x\n", _redv_buffer[0]);
+            return false;
+        }
+
+        int _is_failed = 1;
+        /* Check server's reply */
+        switch (*_temp++) {
+            case 0x00:
+                _is_failed = 0;
+                fprintf(stderr, "CONNECT command Succeeded.\n");
+                break;
+            case 0x01:
+                fprintf(stderr, "General SOCKS server failure.\n");
+                break;
+            case 0x02:
+                fprintf(stderr, "Connection not allowed by ruleset.\n");
+                break;
+            case 0x03:
+                fprintf(stderr, "Network Unreachable.\n");
+                break;
+            case 0x04:
+                fprintf(stderr, "Host unreachable.\n");
+                break;
+            case 0x05:
+                fprintf(stderr, "Connection refused.\n");
+                break;
+            case 0x06:
+                fprintf(stderr, "TTL expired.\n");
+                break;
+            case 0x07:
+                fprintf(stderr, "Command not supported.\n");
+                break;
+            case 0x08:
+                fprintf(stderr, "Address type not supported.\n");
+                break;
+            default:
+                fprintf(stderr, "ssh-socks5-proxy: SOCKS Server reply not understood\n");
+                break;
+        }
+
+        if (_is_failed == 1) return false;
+        /* Ignore RSV */
+        _temp++;
+
+        /* Check ATYP */
+        if (*_temp != 0x01) {
+            fprintf(stderr, "ssh-socks5-proxy: Address type not supported: %u\n", *_temp);
+            return false;
+        }
+        return true;
+    }
 }
 // Listen on specified port and address, default is 0.0.0.0
 bool cleandns_tcpsocket::listen( u_int32_t port, u_int32_t ipaddr )

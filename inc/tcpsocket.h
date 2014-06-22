@@ -49,6 +49,10 @@ class cleandns_tcpsocket
 {
 protected:
     struct pollfd *_svrfd;
+    bool m_is_connected_to_proxy;
+
+    // Internal connect to peer
+    bool _internal_connect( const string &ipaddr, u_int32_t port );
 public:
     // The socket handler
     SOCKET_T  m_socket;
@@ -56,6 +60,8 @@ public:
     cleandns_tcpsocket();
     ~cleandns_tcpsocket();
 
+    // Set up a socks5 proxy.
+    bool setup_proxy( const string &socks5_addr, u_int32_t socks5_port );
     // Connect to peer
     bool connect( const string &ipaddr, u_int32_t port );
     // Listen on specified port and address, default is 0.0.0.0

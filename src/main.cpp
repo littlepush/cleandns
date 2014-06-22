@@ -52,6 +52,9 @@
 string _server_address = "127.0.0.1";
 unsigned int _server_port = 11025;
 string _local_address = "202.96.209.133";
+string _socks5_address = "127.0.0.1";
+unsigned int _socks5_port = 5193;
+bool _use_socks_proxy = false;
 
 #if _DEF_WIN32
 void set_signal_handler( ) {
@@ -117,6 +120,12 @@ void cleandns_udp_client_redirector( cleandns_thread **thread )
         bool _is_filter_domain = domain_match_filter( _domain );
         if ( _is_filter_domain ) {
             cleandns_tcpsocket _re_socket;
+            if ( _use_socks_proxy ) {
+                if ( !_re_socket.setup_proxy(_socks5_address, _socks5_port) ) {
+                    cerr << "cleandns: failed to establish connection to proxy server.";
+                    //break;
+                }
+            }
             if ( !_re_socket.connect( _server_address, _server_port) ) break;
             if ( !_re_socket.write_data(_client_socket->m_data) ) break;
             if ( !_re_socket.read_data(_client_socket->m_data, 5000) ) break;
@@ -179,6 +188,12 @@ void cleandns_tcp_client_redirector( cleandns_thread **thread )
         bool _is_filter_domain = domain_match_filter( _domain );
         if ( _is_filter_domain ) {
             cleandns_tcpsocket _re_socket;
+            if ( _use_socks_proxy ) {
+                if ( !_re_socket.setup_proxy(_socks5_address, _socks5_port) ) {
+                    cerr << "cleandns: failed to establish connection to proxy server.";
+                    //break;
+                }
+            }
             if ( !_re_socket.connect( _server_address, _server_port) ) break;
             if ( !_re_socket.write_data(_buffer) ) break;
             if ( !_re_socket.read_data(_buffer, 5000) ) break;
@@ -266,13 +281,14 @@ void _cleandns_version_info() {
 
 void _cleandns_help_info() {
     _cleandns_version_info();
-    printf( "cleandns --client --filter <file> --remote <remote> --port <port> --local <dns>\n");
+    printf( "cleandns --client -f <file> -r <remote> -p <port> -l <dns> --socks5 <server:port>\n");
     printf( "cleandns --server --port <port> --local <dns>\n");
     printf( "options: \n" );
     printf( "    --filter|-f        The filter file path\n" );
     printf( "    --remote|-r        Remote side address for proxy\n" );
     printf( "    --port|-p          Server side port for proxy\n" );
     printf( "    --local|-l         Local parent dns address\n" );
+    printf( "    --socks5           Specified the socks5 proxy\n");
 }
 
 int main( int argc, char *argv[] ) {
@@ -335,6 +351,22 @@ int main( int argc, char *argv[] ) {
                     return 1;
                 }
                 continue;
+            }
+            if ( _command == "--socks5" ) {
+                if ( _arg + 1 < argc ) {
+                    char _socks5_address_[128] = {0}, _socks5_port_[8] = {0};
+                    sscanf( argv[++_arg], "%s:%s", _socks5_address_, _socks5_port_);
+                    _socks5_address = _socks5_address_;
+                    _socks5_port = atoi(_socks5_port_);
+                    if ( _socks5_address.size() == 0 || _socks5_port > 65535 ) {
+                        cerr << "Invalidate socks5 proxy: " << _socks5_address << ":" << _socks5_port << endl;
+                        return 1;
+                    }
+                    _use_socks_proxy = true;
+                } else {
+                    cerr << "Invalidate argument: " << _command << ", missing parameter." << endl;
+                    return 1;
+                }
             }
             if ( _command == "--client" ) {
                 _is_client = true;
