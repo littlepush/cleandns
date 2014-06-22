@@ -127,7 +127,7 @@ bool cleandns_tcpsocket::_internal_connect( const string &ipaddr, u_int32_t port
     // Reset Socket Statue
     _u = 0;
     CLEANDNS_NETWORK_IOCTL_CALL(m_socket, FIONBIO, &_u);
-
+    this->set_reusable();
     return true;
 }
 
@@ -285,7 +285,7 @@ bool cleandns_tcpsocket::listen( u_int32_t port, u_int32_t ipaddr )
     _svrfd = (struct pollfd *)calloc(1, sizeof(struct pollfd));
     _svrfd->events = POLLIN | POLLPRI;
     _svrfd->fd = m_socket;
-
+    this->set_reusable();
     return true;
 }
 // Close the connection
