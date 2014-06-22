@@ -354,10 +354,15 @@ int main( int argc, char *argv[] ) {
             }
             if ( _command == "--socks5" ) {
                 if ( _arg + 1 < argc ) {
-                    char _socks5_address_[128] = {0}, _socks5_port_[8] = {0};
-                    sscanf( argv[++_arg], "%s:%s", _socks5_address_, _socks5_port_);
-                    _socks5_address = _socks5_address_;
-                    _socks5_port = atoi(_socks5_port_);
+					const char *_socks5_info = argv[++_arg];
+					int _i = 0;
+					u_int32_t _sl = strlen(_socks5_info);
+					_socks5_address = "";
+					for (; _i < _sl; ++_i ) {
+						if ( _socks5_info[_i] == ':' ) break;
+						_socks5_address += _socks5_info[_i];
+					}
+					_socks5_port = atoi(_socks5_info + _i + 1);
                     if ( _socks5_address.size() == 0 || _socks5_port > 65535 ) {
                         cerr << "Invalidate socks5 proxy: " << _socks5_address << ":" << _socks5_port << endl;
                         return 1;

@@ -134,7 +134,10 @@ bool cleandns_tcpsocket::_internal_connect( const string &ipaddr, u_int32_t port
 bool cleandns_tcpsocket::setup_proxy( const string &socks5_addr, u_int32_t socks5_port )
 {
     // Build a connection to the proxy server
-    if ( ! this->_internal_connect( socks5_addr, socks5_port ) ) return false;
+    if ( ! this->_internal_connect( socks5_addr, socks5_port ) ) {
+		fprintf(stderr, "failed to connect to the socks5 proxy server\n");
+		return false;
+	}
 
     char _buffer[3], _recv_buffer[2];
 
@@ -174,31 +177,25 @@ bool cleandns_tcpsocket::connect( const string &ipaddr, u_int32_t port )
         return this->_internal_connect( ipaddr, port );
     } else {
         // Establish a connection through the proxy server.
-        char _buffer[512], *_temp, _redv_buffer[256];
+        u_int8_t _buffer[256] = {0}, _recv_buffer[256] = {0};
         // Socks info
-        u_int8_t version = 0x05, cmd = 0x01, rsv = 0x00, atyp = 0x03;
         u_int8_t _host_len = (u_int8_t)ipaddr.size();
-        u_int16_t _host_port = (u_int16_t)port; // the port must be uint16
-
-        _temp = _buffer;
+        u_int16_t _host_port = htons((u_int16_t)port); // the port must be uint16
 
         /* Assemble the request packet */
-        memcpy(_temp, &version, sizeof (version));
-        _temp += sizeof (version);
-        memcpy(_temp, &cmd, sizeof (cmd));
-        _temp += sizeof (cmd);
-        memcpy(_temp, &rsv, sizeof (rsv));
-        _temp += sizeof (rsv);
-        memcpy(_temp, &atyp, sizeof (atyp));
-        _temp += sizeof (atyp);
-        memcpy(_temp, &_host_len, sizeof(_host_len));
-        _temp += sizeof (_host_len);
-        memcpy(_temp, ipaddr.c_str(), ipaddr.size());
-        _temp += ipaddr.size();
-        memcpy(_temp, &_host_port, sizeof(_host_port));
-        _temp += sizeof (_host_port);
+		_buffer[0] = 0x05;			// version
+		_buffer[1] = 0x01;			// command
+		_buffer[2] = 0x00;			// reserved;
+		_buffer[3] = 0x03;			// address type
+		unsigned int _pos = 4;
+		memcpy(_buffer + _pos, &_host_len, sizeof(_host_len));
+		_pos += sizeof(_host_len);
+        memcpy(_buffer + _pos, ipaddr.c_str(), ipaddr.size());
+        _pos += ipaddr.size();
+        memcpy(_buffer + _pos, &_host_port, sizeof(_host_port));
+        _pos += sizeof(_host_port);
 
-        if (write(m_socket, _buffer, _temp - _buffer) == -1) {
+        if (write(m_socket, _buffer, _pos) == -1) {
             return false;
         }
 
@@ -211,25 +208,20 @@ bool cleandns_tcpsocket::connect( const string &ipaddr, u_int32_t port )
          * since as you can see below, we accept only ATYP == 1 which specifies
          * that the IPv4 address is in a binary format.
          */
-        if (read(m_socket, &_redv_buffer, 10) == -1) {
+        if (read(m_socket, &_recv_buffer, 10) == -1) {
             return false;
         }
-
-        /* temp now points to the recieve buffer. */
-        _temp = _redv_buffer;
 
         /* Check the server's version. */
-        if (*_temp++ != 0x05) {
-            (void)fprintf(stderr, "Unsupported SOCKS version: %x\n", _redv_buffer[0]);
+        if (_recv_buffer[0] != 0x05) {
+            (void)fprintf(stderr, "Unsupported SOCKS version: %x\n", _recv_buffer[0]);
             return false;
         }
-
         int _is_failed = 1;
         /* Check server's reply */
-        switch (*_temp++) {
+        switch (_recv_buffer[1]) {
             case 0x00:
                 _is_failed = 0;
-                fprintf(stderr, "CONNECT command Succeeded.\n");
                 break;
             case 0x01:
                 fprintf(stderr, "General SOCKS server failure.\n");
@@ -261,12 +253,10 @@ bool cleandns_tcpsocket::connect( const string &ipaddr, u_int32_t port )
         }
 
         if (_is_failed == 1) return false;
-        /* Ignore RSV */
-        _temp++;
 
         /* Check ATYP */
-        if (*_temp != 0x01) {
-            fprintf(stderr, "ssh-socks5-proxy: Address type not supported: %u\n", *_temp);
+        if (_recv_buffer[3] != 0x01) {
+            fprintf(stderr, "ssh-socks5-proxy: Address type not supported: %u\n", _recv_buffer[3]);
             return false;
         }
         return true;
