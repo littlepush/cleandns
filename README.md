@@ -31,5 +31,5 @@ Example
 
 Version Log
 ========
-v0.1    first version, rewrite. prototype is plib/pdns
-v0.2    directly support socks5 proxy in the application
+* v0.1    first version, rewrite. prototype is plib/pdns
+* v0.2    directly support socks5 proxy in the application
