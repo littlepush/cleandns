@@ -105,23 +105,27 @@ thread_return_t _THREAD_CALLBACK cleandns_thread::_thread_main( void *param )
     _pcd_thread->m_thread_status = true;
     _pcd_thread->m_thread_sync_sem.give();
 
+    // Copy the data
+    thread_id_t _thread_id = _pcd_thread->m_thread_id;
+    thread_handle _thread_handler = _pcd_thread->m_thread_handler;
+
     // Invoke the job
     _pcd_thread->m_job( &_pcd_thread );
 
-    if ( _pcd_thread == NULL ) return 0;
-    // Stop the thread
-    if ( _pcd_thread->m_thread_id == 0 ) return 0;
+    // Detach current thread's resource.
 #if _DEF_WIN32
-    ::CloseHandle((HANDLE)_pcd_thread->m_thread_handler);
-    _pcd_thread->m_thread_handler = 0;
+    ::CloseHandle((HANDLE)_thread_handler);
+#else
+    pthread_detach( _thread_id );
 #endif
 
-#if !_DEF_WIN32
-    // Detach current thread's resource.
-    pthread_detach( _pcd_thread->m_thread_id );
-#endif
-    _pcd_thread->m_thread_id = 0;
-    _pcd_thread->m_thread_sync_sem.give();
+    if ( _pcd_thread != NULL ) {
+        // Stop the thread
+        if ( _pcd_thread->m_thread_id == 0 ) return 0;
+        _pcd_thread->m_thread_handler = 0;
+        _pcd_thread->m_thread_id = 0;
+        _pcd_thread->m_thread_sync_sem.give();
+    }
     return 0;
 }
 
