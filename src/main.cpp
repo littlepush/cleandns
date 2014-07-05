@@ -48,12 +48,14 @@
 #include "udpsocket.h"
 #include <fstream>
 
+typedef std::pair< string, unsigned int > _tsocks5;
 // Global Parameters
 string _server_address = "127.0.0.1";
 unsigned int _server_port = 11025;
 string _local_address = "202.96.209.133";
-string _socks5_address = "127.0.0.1";
-unsigned int _socks5_port = 5193;
+vector< _tsocks5 > _socks5_array;
+__deprecated string _socks5_address = "127.0.0.1";
+__deprecated unsigned int _socks5_port = 5193;
 bool _use_socks_proxy = false;
 
 #if _DEF_WIN32
@@ -121,9 +123,12 @@ void cleandns_udp_client_redirector( cleandns_thread **thread )
         if ( _is_filter_domain ) {
             cleandns_tcpsocket _re_socket;
             if ( _use_socks_proxy ) {
-                if ( !_re_socket.setup_proxy(_socks5_address, _socks5_port) ) {
-                    cerr << "cleandns: failed to establish connection to proxy server.";
-                    //break;
+                for ( unsigned int i = 0; i < _socks5_array.size(); ++i ) {
+                    _tsocks5 _s5 = _socks5_array[i];
+                    if ( _re_socket.setup_proxy(_s5.first, _s5.second) ) {
+                        break;
+                    }
+                    //cerr << "cleandns: failed to establish connection to proxy server.";
                 }
             }
             if ( !_re_socket.connect( _server_address, _server_port) ) break;
@@ -189,9 +194,12 @@ void cleandns_tcp_client_redirector( cleandns_thread **thread )
         if ( _is_filter_domain ) {
             cleandns_tcpsocket _re_socket;
             if ( _use_socks_proxy ) {
-                if ( !_re_socket.setup_proxy(_socks5_address, _socks5_port) ) {
-                    cerr << "cleandns: failed to establish connection to proxy server.";
-                    //break;
+                for ( unsigned int i = 0; i < _socks5_array.size(); ++i ) {
+                    _tsocks5 _s5 = _socks5_array[i];
+                    if ( _re_socket.setup_proxy(_s5.first, _s5.second) ) {
+                        break;
+                    }
+                    //cerr << "cleandns: failed to establish connection to proxy server.";
                 }
             }
             if ( !_re_socket.connect( _server_address, _server_port) ) break;
@@ -354,18 +362,24 @@ int main( int argc, char *argv[] ) {
             }
             if ( _command == "--socks5" ) {
                 if ( _arg + 1 < argc ) {
-					const char *_socks5_info = argv[++_arg];
-					int _i = 0;
-					u_int32_t _sl = strlen(_socks5_info);
-					_socks5_address = "";
-					for (; _i < _sl; ++_i ) {
-						if ( _socks5_info[_i] == ':' ) break;
-						_socks5_address += _socks5_info[_i];
-					}
-					_socks5_port = atoi(_socks5_info + _i + 1);
-                    if ( _socks5_address.size() == 0 || _socks5_port > 65535 ) {
-                        cerr << "Invalidate socks5 proxy: " << _socks5_address << ":" << _socks5_port << endl;
-                        return 1;
+                    string _socks5_config_string = argv[++_arg];
+                    vector<string> _socks5_config_array;
+                    split_string( _socks5_config_string, ",", _socks5_config_array );
+                    for ( unsigned int _index = 0; _index < _socks5_config_array.size(); ++_index ) {
+                        vector< string > _socks5_config_pair;
+                        split_string( _socks5_config_array[_index], ":", _socks5_config_pair );
+                        if ( _socks5_config_pair.size() != 2 ) {
+                            cerr << "Invalidate socks5 proxy setting: " << _socks5_config_array[_index] 
+                                << "." << endl;
+                            return 1;
+                        }
+                        _tsocks5 _socks5_config = make_pair(
+                            _socks5_config_pair[0], atoi(_socks5_config_pair[1].c_str()));
+                        if ( _socks5_config.second > 65535 ) {
+                            cerr << "Invalidate socks5 proxy: " << _socks5_config_array[_index] << "." << endl;
+                            return 1;
+                        }
+                        _socks5_array.push_back( _socks5_config );
                     }
                     _use_socks_proxy = true;
                 } else {

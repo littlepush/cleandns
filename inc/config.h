@@ -221,6 +221,25 @@ static inline std::string &trim(std::string &s) {
     return ltrim(rtrim(s));
 }
 
+// Split a string with the char in the carry.
+static inline void split_string( const std::string &value, 
+    const std::string &carry, std::vector<std::string> &component )
+{
+    if ( value.size() == 0 ) return;
+    std::string::size_type _pos = 0;
+    do {
+        std::string::size_type _lastPos = std::string::npos;
+        for ( std::string::size_type i = 0; i < carry.size(); ++i ) {
+            std::string::size_type _nextCarry = value.find( carry[i], _pos );
+            _lastPos = (_nextCarry < _lastPos) ? _nextCarry : _lastPos;
+        }
+        if ( _lastPos == std::string::npos ) _lastPos = value.size();
+        std::string _com = value.substr( _pos, _lastPos - _pos );
+        component.push_back(_com);
+        _pos = _lastPos + 1;
+    } while( _pos < value.size() );
+}
+
 using namespace std;
 
 #endif // cleandns.config.h

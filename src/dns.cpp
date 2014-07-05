@@ -46,23 +46,7 @@
 typedef struct filter_list_node filter_list_node; 
 static filter_list_node       *g_fl_root = NULL;
 
-// Split a string with the char in the carry.
-void _split_string( const string &value, const string &carry, vector<string> &component )
-{
-    if ( value.size() == 0 ) return;
-    string::size_type _pos = 0;
-    do {
-        string::size_type _lastPos = string::npos;
-        for ( string::size_type i = 0; i < carry.size(); ++i ) {
-            string::size_type _nextCarry = value.find( carry[i], _pos );
-            _lastPos = (_nextCarry < _lastPos) ? _nextCarry : _lastPos;
-        }
-        if ( _lastPos == string::npos ) _lastPos = value.size();
-        string _com = value.substr( _pos, _lastPos - _pos );
-        component.push_back(_com);
-        _pos = _lastPos + 1;
-    } while( _pos < value.size() );
-}
+#define _split_string           split_string
 
 // Get the domain from the dns querying package.
 // The query domain seg will store the domain in the following format:

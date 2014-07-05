@@ -106,9 +106,12 @@ thread_return_t _THREAD_CALLBACK cleandns_thread::_thread_main( void *param )
     _pcd_thread->m_thread_sync_sem.give();
 
     // Copy the data
-    thread_id_t _thread_id = _pcd_thread->m_thread_id;
+#if _DEF_WIN32
     thread_handle _thread_handler = _pcd_thread->m_thread_handler;
-
+#else
+    thread_id_t _thread_id = _pcd_thread->m_thread_id;
+#endif
+    
     // Invoke the job
     _pcd_thread->m_job( &_pcd_thread );
 
