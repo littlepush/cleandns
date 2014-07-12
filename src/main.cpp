@@ -54,8 +54,8 @@ string _server_address = "127.0.0.1";
 unsigned int _server_port = 11025;
 string _local_address = "202.96.209.133";
 vector< _tsocks5 > _socks5_array;
-__deprecated string _socks5_address = "127.0.0.1";
-__deprecated unsigned int _socks5_port = 5193;
+//__deprecated string _socks5_address = "127.0.0.1";
+//__deprecated unsigned int _socks5_port = 5193;
 bool _use_socks_proxy = false;
 
 #if _DEF_WIN32
