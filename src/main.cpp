@@ -57,6 +57,7 @@ vector< _tsocks5 > _socks5_array;
 //__deprecated string _socks5_address = "127.0.0.1";
 //__deprecated unsigned int _socks5_port = 5193;
 bool _use_socks_proxy = false;
+bool _default_use_filter = true;
 
 #if _DEF_WIN32
 void set_signal_handler( ) {
@@ -120,7 +121,8 @@ void cleandns_udp_client_redirector( cleandns_thread **thread )
             break;
         }
         bool _is_filter_domain = domain_match_filter( _domain );
-        if ( _is_filter_domain ) {
+        bool _is_white_domain = domain_match_whitelist( _domain );
+        if ( _is_filter_domain || (!_is_white_domain && _default_use_filter) ) {
             cleandns_tcpsocket _re_socket;
             if ( _use_socks_proxy ) {
                 for ( unsigned int i = 0; i < _socks5_array.size(); ++i ) {
@@ -191,7 +193,8 @@ void cleandns_tcp_client_redirector( cleandns_thread **thread )
             break;
         }
         bool _is_filter_domain = domain_match_filter( _domain );
-        if ( _is_filter_domain ) {
+        bool _is_white_domain = domain_match_whitelist( _domain );
+        if ( _is_filter_domain || (!_is_white_domain && _default_use_filter) ) {
             cleandns_tcpsocket _re_socket;
             if ( _use_socks_proxy ) {
                 for ( unsigned int i = 0; i < _socks5_array.size(); ++i ) {
@@ -289,10 +292,12 @@ void _cleandns_version_info() {
 
 void _cleandns_help_info() {
     _cleandns_version_info();
-    printf( "cleandns --client -f <file> -r <remote> -p <port> -l <dns> --socks5 <server:port>\n");
+    printf( "cleandns --client -f <file> -w <file> -d <filter|whitelist> -r <remote> -p <port> -l <dns> --socks5 <server:port>\n");
     printf( "cleandns --server --port <port> --local <dns>\n");
     printf( "options: \n" );
     printf( "    --filter|-f        The filter file path\n" );
+    printf( "    --whitelist|-w     The whitelist file path\n" );
+    printf( "    --default|-d       The default route when not in any list file, default is filter\n" );
     printf( "    --remote|-r        Remote side address for proxy\n" );
     printf( "    --port|-p          Server side port for proxy\n" );
     printf( "    --local|-l         Local parent dns address\n" );
@@ -302,6 +307,7 @@ void _cleandns_help_info() {
 int main( int argc, char *argv[] ) {
     const char *_home_path = getenv("HOME");
     string _filter_list_file = string(_home_path) + "/.cleandns.filter";
+    string _white_list_file = string(_home_path) + "/.cleandns.whitelist";
     bool _is_client = false;
     bool _is_server = false;
 
@@ -327,6 +333,33 @@ int main( int argc, char *argv[] ) {
                     return 1;
                 }
                 continue;
+            }
+            if ( _command == "-w" || _command == "--whitelist" ) {
+                if ( _arg + 1 < argc ) {
+                    _white_list_file = argv[++_arg];
+                } else {
+                    cerr << "Invalidate argument: " << _command << ", missing parameter." << endl;
+                    return 1;
+                }
+                continue;
+            }
+            if ( _command == "-d" || _command == "--default" ) {
+                if ( _arg + 1 < argc ) {
+                    string _default_route_setting = argv[++_arg];
+                    if ( _default_route_setting == "filter" ) {
+                        _default_use_filter = true;
+                    } else if ( _default_route_setting == "whitelist" ) {
+                        _default_use_filter = false;
+                    } else {
+                        cerr << "Invalidate argument: " << 
+                        _default_route_setting << 
+                        ", can only be \"filter\" or \"whitelist\"." << endl;
+                        return 2;
+                    }
+                } else {
+                    cerr << "Invalidate argument: " << _command << ", missing parameter." << endl;
+                    return 1;
+                }
             }
             if ( _command == "-l" || _command == "--local" ) {
                 if ( _arg + 1 < argc ) {
@@ -443,6 +476,19 @@ int main( int argc, char *argv[] ) {
                 dns_add_filter_pattern( _pattern_line );
             }
             _filter_stream.close();
+        }
+
+        ifstream _whitelist_stream;
+        _whitelist_stream.open(_white_list_file.c_str(), ios_base::in);
+        if ( _whitelist_stream ) {
+            string _pattern_line;
+            while ( _whitelist_stream.eof() == false ) {
+                getline( _whitelist_stream, _pattern_line );
+                _pattern_line = trim(_pattern_line);
+                if ( _pattern_line.size() == 0 ) continue;
+                dns_add_whitelist_pattern( _pattern_line );
+            }
+            _whitelist_stream.close();
         }
 
         //cleandns_udp_client_worker

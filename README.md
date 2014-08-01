@@ -17,7 +17,7 @@ Usage
 Default remote port is 11025
 * Client
 
-    `cleandns --client --filter <file> --remote <remote> --port <port> --local <dns>` --socks5 <proxy_address:proxy_port>
+    `cleandns --client --filter <file> --whitelist <file> --default <filter|whitelist> --remote <remote> --port <port> --local <dns>` --socks5 <proxy_address:proxy_port>
 
 * Server
 
@@ -33,3 +33,4 @@ Version Log
 ========
 * v0.1    first version, rewrite. prototype is plib/pdns
 * v0.2    directly support socks5 proxy in the application
+* v0.3    support white list

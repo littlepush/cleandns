@@ -45,6 +45,7 @@
 // Global Filter List Root Node.
 typedef struct filter_list_node filter_list_node; 
 static filter_list_node       *g_fl_root = NULL;
+static filter_list_node       *g_wl_root = NULL;
 
 #define _split_string           split_string
 
@@ -79,16 +80,9 @@ int dns_get_domain( const char *pkg, unsigned int len, std::string &domain )
     return 0;
 }
 
-// Add a domain filter pattern to the black list cache.
-// If any query domain match one pattern in the list, we will
-// redirect the request to the remote dns server use tcp socket.
-// So you can setup a socks5 proxy to get clean dns
-void dns_add_filter_pattern( const string &pattern )
+void dns_add_pattern( const string &pattern, filter_list_node *root_node )
 {
-    if ( g_fl_root == NULL ) {
-        g_fl_root = new filter_list_node;
-    }
-    filter_list_node *_blNode = g_fl_root;
+    filter_list_node *_blNode = root_node;
     vector<string> _components;
     _split_string( pattern, ".", _components );
     for ( int i = _components.size() - 1; i >= 0; --i ) {
@@ -168,6 +162,28 @@ void dns_add_filter_pattern( const string &pattern )
         }
     }
 }
+// Add a domain filter pattern to the black list cache.
+// If any query domain match one pattern in the list, we will
+// redirect the request to the remote dns server use tcp socket.
+// So you can setup a socks5 proxy to get clean dns
+void dns_add_filter_pattern( const string &pattern )
+{
+    if ( g_fl_root == NULL ) {
+        g_fl_root = new filter_list_node;
+    }
+    dns_add_pattern(pattern, g_fl_root);
+}
+
+// Add a domain pattern to the white list cache.
+// If any query domain match the pattern in white list, we will
+// redirect the query to the local dns server.
+void dns_add_whitelist_pattern( const string &pattern )
+{
+    if ( g_wl_root == NULL ) {
+        g_wl_root = new filter_list_node;
+    }
+    dns_add_pattern(pattern, g_wl_root);
+}
 
 bool _string_start_with(const string &value, const string &pattern)
 {
@@ -227,6 +243,13 @@ bool _domain_match_any_filter_in_subnode( const string &domain, filter_list_node
 bool domain_match_filter( const string &domain )
 {
     return _domain_match_any_filter_in_subnode( domain, g_fl_root );
+}
+
+
+// Check if specified domain is in the white list.
+bool domain_match_whitelist( const string &domain )
+{
+    return _domain_match_any_filter_in_subnode( domain, g_wl_root );
 }
 
 // cleandns.dns.cpp

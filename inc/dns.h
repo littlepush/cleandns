@@ -106,6 +106,14 @@ void dns_add_filter_pattern( const string &pattern );
 // Check if specified domain is in the filter list.
 bool domain_match_filter( const string &domain );
 
+// Add a domain pattern to the white list cache.
+// If any query domain match the pattern in white list, we will
+// redirect the query to the local dns server.
+void dns_add_whitelist_pattern( const string &pattern );
+
+// Check if specified domain is in the white list.
+bool domain_match_whitelist( const string &domain );
+
 #endif
 
 /*
