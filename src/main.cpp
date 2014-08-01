@@ -360,6 +360,7 @@ int main( int argc, char *argv[] ) {
                     cerr << "Invalidate argument: " << _command << ", missing parameter." << endl;
                     return 1;
                 }
+				continue;
             }
             if ( _command == "-l" || _command == "--local" ) {
                 if ( _arg + 1 < argc ) {
