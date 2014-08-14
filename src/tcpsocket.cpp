@@ -391,6 +391,7 @@ bool cleandns_tcpsocket::read_data( string &buffer, u_int32_t timeout )
             //PDUMP(_idleLoopCount);
             if (_status == SO_IDLE) {
                 //PDUMP( _idleLoopCount );
+				if ( buffer.size() > 0 ) return true;
                 if ( _idleLoopCount > 0 ) _idleLoopCount -= 1;
                 else return true;
             } else break;
