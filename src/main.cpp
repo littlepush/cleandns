@@ -46,6 +46,7 @@
 #include "thread.h"
 #include "tcpsocket.h"
 #include "udpsocket.h"
+#include "cf.h"
 #include <fstream>
 
 typedef std::pair< string, unsigned int > _tsocks5;
@@ -308,6 +309,16 @@ int main( int argc, char *argv[] ) {
     const char *_home_path = getenv("HOME");
     string _filter_list_file = string(_home_path) + "/.cleandns.filter";
     string _white_list_file = string(_home_path) + "/.cleandns.whitelist";
+
+    config_section *_config = open_config_file("./test.conf");
+    if ( _config == NULL ) {
+        cerr << "error." << endl;
+        return 1;
+    }
+    cout << "[default] key1: " << (*_config)["key1"] << endl;
+    close_config_file(_config);
+    return 0;
+
     bool _is_client = false;
     bool _is_server = false;
 
