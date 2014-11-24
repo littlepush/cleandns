@@ -58,7 +58,7 @@ class config_section
 {
     map<string, string> m_config_nodes;
     map<string, config_section*> m_sub_sections;
-
+    map<string, string>::iterator m_iterator;
     string m_name;
     int m_config_level;
     bool m_config_status;
@@ -66,6 +66,9 @@ class config_section
     bool _internal_process_until_find_section_header(ifstream &in, string &head_string);
     config_section();
 public:
+
+    typedef map<string, string>::iterator _tnode;
+
     config_section(ifstream &in);
     ~config_section();
 
@@ -74,8 +77,15 @@ public:
     // check if the config has been loaded correctly.
     operator bool() const;
 
+    void begin_loop();
+    map<string, string>::iterator end();
+    map<string, string>::iterator current_node();
+    void next_node();
+
     string & operator[](const string &k);
     string & operator[](const char *k);
+    bool contains_key(const string &k);
+    void get_sub_section_names(vector<string> &names);
     config_section * sub_section(const string &name);
 };
 

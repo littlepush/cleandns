@@ -46,6 +46,11 @@
 #define __CLEAN_DNS_DNS_PACKAGE_H__
 
 #include "config.h"
+#include "cf.h"
+#include "tcpsocket.h"
+#include "udpsocket.h"
+#include <vector>
+#include <iostream>
 using namespace std;
 
 #pragma pack(push, 1)
@@ -72,6 +77,7 @@ struct dns_package {
 struct filter_list_node;
 typedef pair< string, filter_list_node * >  filter_item;
 typedef map< string, filter_list_node * >   component_dictionary;
+typedef std::pair< string, unsigned int >   server_info;
 
 struct filter_list_node
 {
@@ -97,22 +103,50 @@ struct filter_list_node
 // [length:1Byte][component][length:1Byte][component]...
 int dns_get_domain( const char *pkg, unsigned int len, std::string &domain );
 
-// Add a domain filter pattern to the black list cache.
-// If any query domain match one pattern in the list, we will
-// redirect the request to the remote dns server use tcp socket.
-// So you can setup a socks5 proxy to get clean dns
-void dns_add_filter_pattern( const string &pattern );
+typedef enum {
+    RP_INHERIT  = 0,
+    RP_TCP      = 1,
+    RP_UDP      = 2
+} redirect_protocol;
 
-// Check if specified domain is in the filter list.
-bool domain_match_filter( const string &domain );
+class redirect_rule
+{
+protected:
+    typedef struct filter_list_node     _tFLN;
+    _tFLN   *m_fl_root;
 
-// Add a domain pattern to the white list cache.
-// If any query domain match the pattern in white list, we will
-// redirect the query to the local dns server.
-void dns_add_whitelist_pattern( const string &pattern );
+    string m_name;
+    redirect_protocol m_protocol;
+    vector<server_info> m_redirect_servers;
+    vector<server_info> m_proxy_servers;
 
-// Check if specified domain is in the white list.
-bool domain_match_whitelist( const string &domain );
+public:
+
+    // The name of the redirect rule
+    string &rule_name;
+    // The protocol used
+    redirect_protocol &protocol;
+
+    // Create a redirect rule object with specified config section
+    redirect_rule(config_section *section);
+    ~redirect_rule();
+
+    // Add a domain filter pattern to the pattern list cache.
+    // If any query domain match one pattern in the list, we will
+    // redirect the request to the remote dns server according
+    // to the configure
+    void add_domain_pattern( const string &pattern );
+
+    // Check if specified domain is in the filter list.
+    bool is_match_any_filter( const string &domain );
+
+    // Redirect the client to server according to the configure.
+    // If the domain match any filter, then redirect, otherwise
+    // return false.
+    bool redirect_query(cleandns_tcpsocket *client, const string &domain, const string &incoming);
+    bool redirect_query(cleandns_udpsocket *client, const string &domain, const string &incoming);
+    bool redirect_udp_query(cleandns_tcpsocket *client, const string &incoming);
+};
 
 #endif
 

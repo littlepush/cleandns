@@ -42,11 +42,6 @@
 
 #include "dns.h"
 
-// Global Filter List Root Node.
-typedef struct filter_list_node filter_list_node; 
-static filter_list_node       *g_fl_root = NULL;
-static filter_list_node       *g_wl_root = NULL;
-
 #define _split_string           split_string
 
 // Get the domain from the dns querying package.
@@ -162,28 +157,6 @@ void dns_add_pattern( const string &pattern, filter_list_node *root_node )
         }
     }
 }
-// Add a domain filter pattern to the black list cache.
-// If any query domain match one pattern in the list, we will
-// redirect the request to the remote dns server use tcp socket.
-// So you can setup a socks5 proxy to get clean dns
-void dns_add_filter_pattern( const string &pattern )
-{
-    if ( g_fl_root == NULL ) {
-        g_fl_root = new filter_list_node;
-    }
-    dns_add_pattern(pattern, g_fl_root);
-}
-
-// Add a domain pattern to the white list cache.
-// If any query domain match the pattern in white list, we will
-// redirect the query to the local dns server.
-void dns_add_whitelist_pattern( const string &pattern )
-{
-    if ( g_wl_root == NULL ) {
-        g_wl_root = new filter_list_node;
-    }
-    dns_add_pattern(pattern, g_wl_root);
-}
 
 bool _string_start_with(const string &value, const string &pattern)
 {
@@ -239,17 +212,190 @@ bool _domain_match_any_filter_in_subnode( const string &domain, filter_list_node
     return false;
 }
 
-// Check if specified domain is in the filter list.
-bool domain_match_filter( const string &domain )
+void redirect_rule::add_domain_pattern( const string &pattern )
 {
-    return _domain_match_any_filter_in_subnode( domain, g_fl_root );
+    dns_add_pattern(pattern, this->m_fl_root);
 }
 
-
-// Check if specified domain is in the white list.
-bool domain_match_whitelist( const string &domain )
+bool redirect_rule::is_match_any_filter( const string &domain )
 {
-    return _domain_match_any_filter_in_subnode( domain, g_wl_root );
+    return _domain_match_any_filter_in_subnode( domain, this->m_fl_root);
+}
+
+redirect_rule::redirect_rule(config_section *section)
+:rule_name(m_name), protocol(m_protocol)
+{
+    m_fl_root = new _tFLN;
+
+    // Name
+    m_name = section->name;
+
+    // Redirect protocol
+    m_protocol = RP_INHERIT;
+    if ( section->contains_key("redirect-protocol") ) {
+        string _protocol_conf = (*section)["redirect-protocol"];
+        if ( _protocol_conf == "inherit" ) {
+            m_protocol = RP_INHERIT;
+        } else if ( _protocol_conf == "tcp" ) {
+            m_protocol = RP_TCP;
+        } else if ( _protocol_conf == "udp" ) {
+            m_protocol = RP_UDP;
+        } else {
+            cerr << "warning: invalidate redirect protocol setting: " << _protocol_conf << endl;
+            m_protocol = RP_INHERIT;
+        }
+    }
+
+    // Server list
+    if ( section->contains_key("server") == false ) {
+        cerr << "warning: invalidate rule setting, missing server list." << endl;
+    } else {
+        string _server_list = (*section)["server"];
+        vector<string> _server_com_list;
+        split_string(_server_list, ",", _server_com_list);
+        for ( int i = 0; i < _server_com_list.size(); ++i ) {
+            string _s_conf = _server_com_list[i];
+            vector<string> _server_parts;
+            split_string(_s_conf, ":", _server_parts);
+            if ( _server_parts.size() != 2 ) {
+                cerr << "warning: invalidate server info: " << _s_conf << endl;
+                continue;
+            }
+            server_info _si = make_pair(_server_parts[0], atoi(_server_parts[1].c_str()));
+            m_redirect_servers.push_back(_si);
+        }
+        if ( m_redirect_servers.size() == 0 ) {
+            cerr << "warning: invalidate rule setting, no validate server." << endl;
+        }
+    }
+
+    // Proxy list
+    if ( section->contains_key("socks5-proxy") ) {
+        if ( m_protocol != RP_TCP ) {
+            cerr << "warning: proxy only available when the redirect protocol is set to tcp." << endl;
+        } else {
+            string _proxy_list = (*section)["socks5-proxy"];
+            vector<string> _proxy_com_list;
+            split_string(_proxy_list, ",", _proxy_com_list);
+            for ( int i = 0; i < _proxy_com_list.size(); ++i ) {
+                string _p_conf = _proxy_com_list[i];
+                vector<string> _proxy_parts;
+                split_string(_p_conf, ":", _proxy_parts);
+                if ( _proxy_parts.size() != 2 ) {
+                    cerr << "warning: invalidate proxy info: " << _p_conf << endl;
+                    continue;
+                }
+                server_info _pi = make_pair(_proxy_parts[0], atoi(_proxy_parts[1].c_str()));
+                m_proxy_servers.push_back(_pi);
+            }
+        }
+    }
+
+    // Add filter list
+    config_section *_filter_list = section->sub_section("filter");
+    if ( _filter_list == NULL ) {
+        // make all domain go through this redirect rule
+        this->add_domain_pattern("*");
+    } else {
+        section->begin_loop();
+        config_section::_tnode _node = section->current_node();
+        while( _node != section->end() ) {
+            this->add_domain_pattern(_node->first);
+            section->next_node();
+            _node = section->current_node();
+        }
+    }
+}
+
+redirect_rule::~redirect_rule()
+{
+
+}
+bool redirect_rule::redirect_udp_query(cleandns_tcpsocket *client, const string &incoming)
+{
+    if ( m_redirect_servers.size() == 0 ) return false;
+    cleandns_udpsocket _so;
+    for ( int s = 0; s < m_redirect_servers.size(); ++s ) {
+        server_info _si = m_redirect_servers[s];
+        if ( !_so.connect(_si.first, _si.second) ) continue;
+        if ( !_so.write_data(incoming) ) continue;
+        string _outcoming;
+        if ( !_so.read_data(_outcoming, 5000) ) continue;
+        _so.close();
+        client->write_data(_outcoming);
+        return true;
+    }
+    return false;
+}
+
+bool redirect_rule::redirect_query(cleandns_tcpsocket *client, const string &domain, const string &incoming)
+{
+    if ( m_redirect_servers.size() == 0 ) return false;
+    if ( !this->is_match_any_filter(domain) ) return false; // not match this rule
+
+    bool _ret = false;
+    cleandns_tcpsocket _so;
+    for ( int s = 0; s < m_redirect_servers.size(); ++s ) {
+        _so.close();
+        for ( int i = 0; i < m_proxy_servers.size(); ++i ) {
+            server_info _pi = m_proxy_servers[i];
+            if ( _so.setup_proxy(_pi.first, _pi.second) ) break;
+        }
+        server_info _si = m_redirect_servers[s];
+        if ( !_so.connect(_si.first, _si.second) ) continue;
+        if ( !_so.write_data(incoming) ) continue;
+        string _outcoming;
+        if ( !_so.read_data(_outcoming, 5000) ) continue;
+        _so.close();
+        client->write_data(_outcoming);
+        _ret = true;
+        break;
+    }
+    return _ret;
+}
+bool redirect_rule::redirect_query(cleandns_udpsocket *client, const string &domain, const string &incoming)
+{
+    if ( m_redirect_servers.size() == 0 ) return false;
+    if ( !this->is_match_any_filter(domain) ) return false; // not match this rule
+
+    if ( m_protocol == RP_TCP ) {   // the same as tcp redirect
+        bool _ret = false;
+        cleandns_tcpsocket _so;
+        for ( int s = 0; s < m_redirect_servers.size(); ++s ) {
+            _so.close();
+            for ( int i = 0; i < m_proxy_servers.size(); ++i ) {
+                server_info _pi = m_proxy_servers[i];
+                if ( _so.setup_proxy(_pi.first, _pi.second) ) break;
+            }
+            server_info _si = m_redirect_servers[s];
+            if ( !_so.connect(_si.first, _si.second) ) continue;
+            if ( !_so.write_data(incoming) ) continue;
+            string _outcoming;
+            if ( !_so.read_data(_outcoming, 5000) ) continue;
+            _so.close();
+            client->write_data(_outcoming);
+            _ret = true;
+            break;
+        }
+        return _ret;
+    } else {
+        bool _ret = false;
+        cleandns_udpsocket _so;
+
+        for ( int s = 0; s < m_redirect_servers.size(); ++s ) {
+            _so.close();
+            server_info _si = m_redirect_servers[s];
+            if ( !_so.connect(_si.first, _si.second) ) continue;
+            if ( !_so.write_data(incoming) ) continue;
+            string _outcoming;
+            if ( !_so.read_data(_outcoming, 5000) ) continue;
+            _so.close();
+            client->write_data(_outcoming);
+            _ret = true;
+            break;
+        }
+        return _ret;
+    }
 }
 
 // cleandns.dns.cpp

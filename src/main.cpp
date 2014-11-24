@@ -49,16 +49,11 @@
 #include "cf.h"
 #include <fstream>
 
-typedef std::pair< string, unsigned int > _tsocks5;
-// Global Parameters
-string _server_address = "127.0.0.1";
-unsigned int _server_port = 11025;
-string _local_address = "202.96.209.133";
-vector< _tsocks5 > _socks5_array;
-//__deprecated string _socks5_address = "127.0.0.1";
-//__deprecated unsigned int _socks5_port = 5193;
-bool _use_socks_proxy = false;
-bool _default_use_filter = true;
+// Default redirect rule
+redirect_rule *_default_rule;
+vector<redirect_rule *> _rules;
+
+unsigned int _server_port = 53;
 
 #if _DEF_WIN32
 void set_signal_handler( ) {
@@ -121,34 +116,15 @@ void cleandns_udp_client_redirector( cleandns_thread **thread )
             cerr << "cleandns: failed to get domain info from the package.";
             break;
         }
-        bool _is_filter_domain = domain_match_filter( _domain );
-        bool _is_white_domain = domain_match_whitelist( _domain );
-        if ( _is_filter_domain || (!_is_white_domain && _default_use_filter) ) {
-            cleandns_tcpsocket _re_socket;
-            if ( _use_socks_proxy ) {
-                for ( unsigned int i = 0; i < _socks5_array.size(); ++i ) {
-                    _tsocks5 _s5 = _socks5_array[i];
-                    if ( _re_socket.setup_proxy(_s5.first, _s5.second) ) {
-                        break;
-                    }
-                    //cerr << "cleandns: failed to establish connection to proxy server.";
-                }
-            }
-            if ( !_re_socket.connect( _server_address, _server_port) ) break;
-            if ( !_re_socket.write_data(_client_socket->m_data) ) break;
-            if ( !_re_socket.read_data(_client_socket->m_data, 5000) ) break;
-            _re_socket.close();
+        bool _status = false;
+        for ( int i = 0; i < _rules.size(); ++i ) {
+            if ( !_rules[i]->redirect_query(_client_socket, _domain, _client_socket->m_data) ) continue;
+            _status = true; 
+            break;
+        }
 
-            _client_socket->write_data(_client_socket->m_data);
-        } else {
-            // Redirect to local server use udp
-            cleandns_udpsocket _re_socket;
-            if ( !_re_socket.connect( _local_address, 53 ) ) break;
-            if ( !_re_socket.write_data(_client_socket->m_data) ) break;
-            if ( !_re_socket.read_data(_client_socket->m_data, 3000) ) break;
-            _re_socket.close();
-
-            _client_socket->write_data(_client_socket->m_data);
+        if ( !_status ) {
+            _default_rule->redirect_query(_client_socket, _domain, _client_socket->m_data );
         }
     } while ( false );
 
@@ -161,10 +137,19 @@ void cleandns_udp_client_redirector( cleandns_thread **thread )
 void cleandns_udp_client_worker( cleandns_thread **thread )
 {
     cleandns_udpsocket _udp_svr_so;
-    if ( !_udp_svr_so.listen(53) ) {
-        sleep(1);
-        cerr << "cleandns: failed to listen on 53 for udp worker." << endl;
-        exit(2);
+    int _time = 1;
+    bool _st = false;
+    for ( int i = 0; i < 6; ++i ) {
+        if ( !_udp_svr_so.listen(53) ) {
+            cerr << "cleandns: failed to listen on 53 for udp worker." << endl;
+            sleep( _time *= 2 );
+        }
+        _st = true;
+        break;
+    }
+    if ( _st == false ) {
+        cerr << "cleandns: failed to listen on 53 for udp worker, exit." << endl;
+        exit(1);
     }
     while( (*thread)->thread_status() ) {
         cleandns_udpsocket *_client = _udp_svr_so.get_client();
@@ -193,34 +178,15 @@ void cleandns_tcp_client_redirector( cleandns_thread **thread )
             cerr << "cleandns: failed to get domain info from the package.";
             break;
         }
-        bool _is_filter_domain = domain_match_filter( _domain );
-        bool _is_white_domain = domain_match_whitelist( _domain );
-        if ( _is_filter_domain || (!_is_white_domain && _default_use_filter) ) {
-            cleandns_tcpsocket _re_socket;
-            if ( _use_socks_proxy ) {
-                for ( unsigned int i = 0; i < _socks5_array.size(); ++i ) {
-                    _tsocks5 _s5 = _socks5_array[i];
-                    if ( _re_socket.setup_proxy(_s5.first, _s5.second) ) {
-                        break;
-                    }
-                    //cerr << "cleandns: failed to establish connection to proxy server.";
-                }
-            }
-            if ( !_re_socket.connect( _server_address, _server_port) ) break;
-            if ( !_re_socket.write_data(_buffer) ) break;
-            if ( !_re_socket.read_data(_buffer, 5000) ) break;
-            _re_socket.close();
+        bool _status = false;
+        for ( int i = 0; i < _rules.size(); ++i ) {
+            if ( !_rules[i]->redirect_query(_client_socket, _domain, _buffer) ) continue;
+            _status = true; 
+            break;
+        }
 
-            _client_socket->write_data(_buffer);
-        } else {
-            // Redirect to local server use udp
-            cleandns_udpsocket _re_socket;
-            if ( !_re_socket.connect( _local_address, 53 ) ) break;
-            if ( !_re_socket.write_data(_buffer) ) break;
-            if ( !_re_socket.read_data(_buffer, 3000) ) break;
-            _re_socket.close();
-
-            _client_socket->write_data(_buffer);
+        if ( !_status ) {
+            _default_rule->redirect_query(_client_socket, _domain, _buffer );
         }
     } while ( false );
 
@@ -231,8 +197,18 @@ void cleandns_tcp_client_redirector( cleandns_thread **thread )
 void cleandns_tcp_client_worker( cleandns_thread **thread )
 {
     cleandns_tcpsocket _tcp_svr_so;
-    if ( !_tcp_svr_so.listen(53) ) {
-        cerr << "cleandns: failed to listen on 53 for tcp worker." << endl;
+    int _time = 1;
+    bool _st = false;
+    for ( int i = 0; i < 6; ++i ) {
+        if ( !_tcp_svr_so.listen(53) ) {
+            cerr << "cleandns: failed to listen on 53 for tcp worker." << endl;
+            sleep( _time *= 2 );
+        }
+        _st = true;
+        break;
+    }
+    if ( _st == false ) {
+        cerr << "cleandns: failed to listen on 53 for tcp worker, exit." << endl;
         exit(1);
     }
     while( (*thread)->thread_status() ) {
@@ -256,13 +232,16 @@ void cleandns_tcp_server_redirector( cleandns_thread **thread )
     do {
         string _buffer;
         if ( !_client_socket->read_data( _buffer, 3000 ) ) break;
-        cleandns_udpsocket _re_socket;
-        if ( !_re_socket.connect( _local_address, 53 ) ) break;
-        if ( !_re_socket.write_data(_buffer) ) break;
-        if ( !_re_socket.read_data(_buffer, 3000) ) break;
-        _re_socket.close();
+        bool _status = false;
+        for ( int i = 0; i < _rules.size(); ++i ) {
+            if ( !_rules[i]->redirect_udp_query(_client_socket, _buffer) ) continue;
+            _status = true; 
+            break;
+        }
 
-        _client_socket->write_data(_buffer);
+        if ( !_status ) {
+            _default_rule->redirect_udp_query(_client_socket, _buffer );
+        }
     } while ( false );
 
     delete _client_socket;
@@ -293,34 +272,14 @@ void _cleandns_version_info() {
 
 void _cleandns_help_info() {
     _cleandns_version_info();
-    printf( "cleandns --client -f <file> -w <file> -d <filter|whitelist> -r <remote> -p <port> -l <dns> --socks5 <server:port>\n");
-    printf( "cleandns --server --port <port> --local <dns>\n");
+    printf( "cleandns --config <file>\n");
     printf( "options: \n" );
-    printf( "    --filter|-f        The filter file path\n" );
-    printf( "    --whitelist|-w     The whitelist file path\n" );
-    printf( "    --default|-d       The default route when not in any list file, default is filter\n" );
-    printf( "    --remote|-r        Remote side address for proxy\n" );
-    printf( "    --port|-p          Server side port for proxy\n" );
-    printf( "    --local|-l         Local parent dns address\n" );
-    printf( "    --socks5           Specified the socks5 proxy\n");
+    printf( "    --config|-c        The configuration file path\n" );
 }
 
 int main( int argc, char *argv[] ) {
     const char *_home_path = getenv("HOME");
-    string _filter_list_file = string(_home_path) + "/.cleandns.filter";
-    string _white_list_file = string(_home_path) + "/.cleandns.whitelist";
-
-    config_section *_config = open_config_file("./test.conf");
-    if ( _config == NULL ) {
-        cerr << "error." << endl;
-        return 1;
-    }
-    cout << "[default] key1: " << (*_config)["key1"] << endl;
-    close_config_file(_config);
-    return 0;
-
-    bool _is_client = false;
-    bool _is_server = false;
+    string _config_file = string(_home_path) + "/.cleandns.conf";
 
     if ( argc >= 2 ) {
         int _arg = 1;
@@ -336,137 +295,67 @@ int main( int argc, char *argv[] ) {
                 _cleandns_version_info();
                 return 0;
             }
-            if ( _command == "-f" || _command == "--filter" ) {
+            if ( _command == "-c" || _command == "--config" ) {
                 if ( _arg + 1 < argc ) {
-                    _filter_list_file = argv[++_arg];
+                    _config_file = argv[++_arg];
                 } else {
                     cerr << "Invalidate argument: " << _command << ", missing parameter." << endl;
                     return 1;
                 }
                 continue;
-            }
-            if ( _command == "-w" || _command == "--whitelist" ) {
-                if ( _arg + 1 < argc ) {
-                    _white_list_file = argv[++_arg];
-                } else {
-                    cerr << "Invalidate argument: " << _command << ", missing parameter." << endl;
-                    return 1;
-                }
-                continue;
-            }
-            if ( _command == "-d" || _command == "--default" ) {
-                if ( _arg + 1 < argc ) {
-                    string _default_route_setting = argv[++_arg];
-                    if ( _default_route_setting == "filter" ) {
-                        _default_use_filter = true;
-                    } else if ( _default_route_setting == "whitelist" ) {
-                        _default_use_filter = false;
-                    } else {
-                        cerr << "Invalidate argument: " << 
-                        _default_route_setting << 
-                        ", can only be \"filter\" or \"whitelist\"." << endl;
-                        return 2;
-                    }
-                } else {
-                    cerr << "Invalidate argument: " << _command << ", missing parameter." << endl;
-                    return 1;
-                }
-				continue;
-            }
-            if ( _command == "-l" || _command == "--local" ) {
-                if ( _arg + 1 < argc ) {
-                    _local_address = argv[++_arg];
-                } else {
-                    cerr << "Invalidate argument: " << _command << ", missing parameter." << endl;
-                    return 1;
-                }
-                continue;
-            }
-            if ( _command == "-r" || _command == "--remote" ) {
-                if ( _arg + 1 < argc ) {
-                    _server_address = argv[++_arg];
-                } else {
-                    cerr << "Invalidate argument: " << _command << ", missing parameter." << endl;
-                    return 1;
-                }
-                continue;
-            }
-            if ( _command == "-p" || _command == "--port" ) {
-                if ( _arg + 1 < argc ) {
-                    string _port = argv[++_arg];
-                    _server_port = atoi(_port.c_str());
-                    if ( _server_port == 0 || _server_port > 65535 ) {
-                        cerr << "Invalidate port: " << _server_port << "." << endl;
-                        return 1;
-                    } 
-                } else {
-                    cerr << "Invalidate argument: " << _command << ", missing parameter." << endl;
-                    return 1;
-                }
-                continue;
-            }
-            if ( _command == "--socks5" ) {
-                if ( _arg + 1 < argc ) {
-                    string _socks5_config_string = argv[++_arg];
-                    vector<string> _socks5_config_array;
-                    split_string( _socks5_config_string, ",", _socks5_config_array );
-                    for ( unsigned int _index = 0; _index < _socks5_config_array.size(); ++_index ) {
-                        vector< string > _socks5_config_pair;
-                        split_string( _socks5_config_array[_index], ":", _socks5_config_pair );
-                        if ( _socks5_config_pair.size() != 2 ) {
-                            cerr << "Invalidate socks5 proxy setting: " << _socks5_config_array[_index] 
-                                << "." << endl;
-                            return 1;
-                        }
-                        _tsocks5 _socks5_config = make_pair(
-                            _socks5_config_pair[0], atoi(_socks5_config_pair[1].c_str()));
-                        if ( _socks5_config.second > 65535 ) {
-                            cerr << "Invalidate socks5 proxy: " << _socks5_config_array[_index] << "." << endl;
-                            return 1;
-                        }
-                        _socks5_array.push_back( _socks5_config );
-                    }
-                    _use_socks_proxy = true;
-                } else {
-                    cerr << "Invalidate argument: " << _command << ", missing parameter." << endl;
-                    return 1;
-                }
-				continue;
-            }
-            if ( _command == "--client" ) {
-                _is_client = true;
-                continue;
-            }
-            if ( _command == "--server" ) {
-                _is_server = true;
-				continue;
             }
             cerr << "Invalidate argument: " << _command << "." << endl;
             return 1;
         }
     }
 
-    if ( _is_client && _is_server ) {
-        cerr << "Cannot be server and client at same time." << endl;
+    config_section *_config = open_config_file(_config_file.c_str());
+    if ( _config == NULL ) {
+        cerr << "failed to open config file or invalidate configuration." << endl;
         return 1;
     }
-    if ( !(_is_client || _is_server) ) {
-        cerr << "Must specified to be client or server." << endl;
-        return 1;
+
+    bool _is_client = false;
+    bool _is_server = false;
+
+    // Check work-mode
+    if ( _config->contains_key("work-mode") ) {
+        string _mode = (*_config)["work-mode"];
+        if ( _mode == "client" ) {
+            _is_client = true;
+        } else if ( _mode == "server" ) {
+            _is_server = true;
+        } else {
+            cerr << "error work-mode." << endl;
+            close_config_file(_config);
+            return 1;
+        }
+    } else {
+        _is_client = true;
+    }
+    // Check rules
+    config_section *_redirect_rules = _config->sub_section("redirect-rule");
+    if ( _redirect_rules == NULL ) {
+        cerr << "error, no redirect rule." << endl;
+        close_config_file(_config);
+        return 2;
     }
 
     pid_t _pid = fork();
     if ( _pid < 0 ) {
         cerr << "Failed to create child process." << endl;
+        close_config_file(_config);
         return 2;
     }
     if ( _pid > 0 ) {
         // Has create the child process.
+        close_config_file(_config);
         return 0;
     }
 
     if ( setsid() < 0 ) {
         cerr << "failed to set session leader for child process." << endl;
+        close_config_file(_config);
         return 3;
     }
 
@@ -475,34 +364,19 @@ int main( int argc, char *argv[] ) {
     cleandns_thread *_client_tcp_worker_thread = NULL;
     cleandns_thread *_server_tcp_worker_thread = NULL;
 
+    // Load configuration
+    vector< string > _rule_name_list;
+    _redirect_rules->get_sub_section_names(_rule_name_list);
+    for ( int i = 0; i < _rule_name_list.size(); ++i ) {
+        redirect_rule *_rule = new redirect_rule(_redirect_rules->sub_section(_rule_name_list[i]));
+        if ( _rule->rule_name == "default" ) {
+            _default_rule = _rule;
+        } else {
+            _rules.push_back(_rule);
+        }
+    }
+
     if ( _is_client ) {
-        // Try to read each line in the filter list.
-        ifstream _filter_stream;
-        _filter_stream.open(_filter_list_file.c_str(), ios_base::in);
-        if ( _filter_stream ) {
-            string _pattern_line;
-            while ( _filter_stream.eof() == false ) {
-                getline( _filter_stream, _pattern_line );
-                _pattern_line = trim(_pattern_line);
-                if ( _pattern_line.size() == 0 ) continue;
-                dns_add_filter_pattern( _pattern_line );
-            }
-            _filter_stream.close();
-        }
-
-        ifstream _whitelist_stream;
-        _whitelist_stream.open(_white_list_file.c_str(), ios_base::in);
-        if ( _whitelist_stream ) {
-            string _pattern_line;
-            while ( _whitelist_stream.eof() == false ) {
-                getline( _whitelist_stream, _pattern_line );
-                _pattern_line = trim(_pattern_line);
-                if ( _pattern_line.size() == 0 ) continue;
-                dns_add_whitelist_pattern( _pattern_line );
-            }
-            _whitelist_stream.close();
-        }
-
         //cleandns_udp_client_worker
         _client_udp_worker_thread = new cleandns_thread( cleandns_udp_client_worker );
         _client_udp_worker_thread->start_thread();
@@ -510,10 +384,16 @@ int main( int argc, char *argv[] ) {
         _client_tcp_worker_thread = new cleandns_thread( cleandns_tcp_client_worker );
         _client_tcp_worker_thread->start_thread();
     } else {
-        if ( _local_address == "202.96.209.133" ) _local_address = "8.8.8.8";
+        // port
+        if ( _config->contains_key("port") ) {
+            _server_port = atoi((*_config)["port"].c_str());
+        }
         _server_tcp_worker_thread = new cleandns_thread( cleandns_tcp_server_worker );
         _server_tcp_worker_thread->start_thread();
     }
+
+    // Done
+    close_config_file(_config);
 
     // Wait for close signal and exit
     wait_for_exit_signal();
@@ -523,8 +403,6 @@ int main( int argc, char *argv[] ) {
     } else {
         if ( _server_tcp_worker_thread ) _server_tcp_worker_thread->stop_thread();
     }
-
-    exit(0);
 
     return 0;
 }

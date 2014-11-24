@@ -40,6 +40,11 @@
     ENJOY YOUR LIFE AND BE FAR AWAY FROM BUGS.
 */
 
+#pragma once
+
+#ifndef __CLEAN_DNS_TCPSOCKET_H__
+#define __CLEAN_DNS_TCPSOCKET_H__
+
 #include "config.h"
 #include "socket.h"
 #include <poll.h>
@@ -80,6 +85,8 @@ public:
     // Write data to peer.
     bool write_data( const string &data );
 };
+
+#endif
 
 /*
  Push Chen.

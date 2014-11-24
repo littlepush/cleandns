@@ -130,11 +130,32 @@ config_section::~config_section()
     }
 }
 
+void config_section::begin_loop()
+{
+    m_iterator = m_config_nodes.begin();
+}
+map<string, string>::iterator config_section::end()
+{
+    return m_config_nodes.end();
+}
+map<string, string>::iterator config_section::current_node()
+{
+    return m_iterator;
+}
+void config_section::next_node()
+{
+    m_iterator++;
+}
+
 config_section::operator bool() const
 {
     return m_config_status;
 }
 
+bool config_section::contains_key(const string &k)
+{
+    return m_config_nodes.find(k) != m_config_nodes.end();
+}
 string & config_section::operator[](const string &k)
 {
     return m_config_nodes[k];
@@ -143,6 +164,14 @@ string & config_section::operator[](const char *k)
 {
     return m_config_nodes[k];
 }
+void config_section::get_sub_section_names(vector<string> &names)
+{
+    for ( map<string, config_section*>::iterator _i = m_sub_sections.begin();
+        _i != m_sub_sections.end(); ++_i ) {
+        names.push_back(_i->first);
+    }
+}
+
 config_section * config_section::sub_section(const string &name)
 {
     map<string, config_section *>::iterator _i_sec = m_sub_sections.find(name);
