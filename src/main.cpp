@@ -117,7 +117,7 @@ void cleandns_udp_client_redirector( cleandns_thread **thread )
             break;
         }
         bool _status = false;
-        for ( int i = 0; i < _rules.size(); ++i ) {
+        for ( unsigned int i = 0; i < _rules.size(); ++i ) {
             if ( !_rules[i]->redirect_query(_client_socket, _domain, _client_socket->m_data) ) continue;
             _status = true; 
             break;
@@ -179,7 +179,7 @@ void cleandns_tcp_client_redirector( cleandns_thread **thread )
             break;
         }
         bool _status = false;
-        for ( int i = 0; i < _rules.size(); ++i ) {
+        for ( unsigned int i = 0; i < _rules.size(); ++i ) {
             if ( !_rules[i]->redirect_query(_client_socket, _domain, _buffer) ) continue;
             _status = true; 
             break;
@@ -233,7 +233,7 @@ void cleandns_tcp_server_redirector( cleandns_thread **thread )
         string _buffer;
         if ( !_client_socket->read_data( _buffer, 3000 ) ) break;
         bool _status = false;
-        for ( int i = 0; i < _rules.size(); ++i ) {
+        for ( unsigned int i = 0; i < _rules.size(); ++i ) {
             if ( !_rules[i]->redirect_udp_query(_client_socket, _buffer) ) continue;
             _status = true; 
             break;
@@ -367,7 +367,7 @@ int main( int argc, char *argv[] ) {
     // Load configuration
     vector< string > _rule_name_list;
     _redirect_rules->get_sub_section_names(_rule_name_list);
-    for ( int i = 0; i < _rule_name_list.size(); ++i ) {
+    for ( unsigned int i = 0; i < _rule_name_list.size(); ++i ) {
         redirect_rule *_rule = new redirect_rule(_redirect_rules->sub_section(_rule_name_list[i]));
         if ( _rule->rule_name == "default" ) {
             _default_rule = _rule;

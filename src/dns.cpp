@@ -80,7 +80,7 @@ void dns_add_pattern( const string &pattern, filter_list_node *root_node )
     filter_list_node *_blNode = root_node;
     vector<string> _components;
     _split_string( pattern, ".", _components );
-    for ( int i = _components.size() - 1; i >= 0; --i ) {
+    for ( int i = (int)_components.size() - 1; i >= 0; --i ) {
         string _com = _components[i];
         //PINFO("Parsing component: " << _com);
         bool _beginWithPattern = _com[0] == '*';
