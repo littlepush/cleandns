@@ -253,7 +253,7 @@ redirect_rule::redirect_rule(config_section *section)
         string _server_list = (*section)["server"];
         vector<string> _server_com_list;
         split_string(_server_list, ",", _server_com_list);
-        for ( int i = 0; i < _server_com_list.size(); ++i ) {
+        for ( int i = 0; i < (int)_server_com_list.size(); ++i ) {
             string _s_conf = _server_com_list[i];
             vector<string> _server_parts;
             split_string(_s_conf, ":", _server_parts);
@@ -277,7 +277,7 @@ redirect_rule::redirect_rule(config_section *section)
             string _proxy_list = (*section)["socks5-proxy"];
             vector<string> _proxy_com_list;
             split_string(_proxy_list, ",", _proxy_com_list);
-            for ( int i = 0; i < _proxy_com_list.size(); ++i ) {
+            for ( int i = 0; i < (int)_proxy_com_list.size(); ++i ) {
                 string _p_conf = _proxy_com_list[i];
                 vector<string> _proxy_parts;
                 split_string(_p_conf, ":", _proxy_parts);
@@ -315,7 +315,7 @@ bool redirect_rule::redirect_udp_query(cleandns_tcpsocket *client, const string 
 {
     if ( m_redirect_servers.size() == 0 ) return false;
     cleandns_udpsocket _so;
-    for ( int s = 0; s < m_redirect_servers.size(); ++s ) {
+    for ( int s = 0; s < (int)m_redirect_servers.size(); ++s ) {
         server_info _si = m_redirect_servers[s];
         if ( !_so.connect(_si.first, _si.second) ) continue;
         if ( !_so.write_data(incoming) ) continue;
@@ -335,9 +335,9 @@ bool redirect_rule::redirect_query(cleandns_tcpsocket *client, const string &dom
 
     bool _ret = false;
     cleandns_tcpsocket _so;
-    for ( int s = 0; s < m_redirect_servers.size(); ++s ) {
+    for ( int s = 0; s < (int)m_redirect_servers.size(); ++s ) {
         _so.close();
-        for ( int i = 0; i < m_proxy_servers.size(); ++i ) {
+        for ( int i = 0; i < (int)m_proxy_servers.size(); ++i ) {
             server_info _pi = m_proxy_servers[i];
             if ( _so.setup_proxy(_pi.first, _pi.second) ) break;
         }
@@ -361,9 +361,9 @@ bool redirect_rule::redirect_query(cleandns_udpsocket *client, const string &dom
     if ( m_protocol == RP_TCP ) {   // the same as tcp redirect
         bool _ret = false;
         cleandns_tcpsocket _so;
-        for ( int s = 0; s < m_redirect_servers.size(); ++s ) {
+        for ( int s = 0; s < (int)m_redirect_servers.size(); ++s ) {
             _so.close();
-            for ( int i = 0; i < m_proxy_servers.size(); ++i ) {
+            for ( int i = 0; i < (int)m_proxy_servers.size(); ++i ) {
                 server_info _pi = m_proxy_servers[i];
                 if ( _so.setup_proxy(_pi.first, _pi.second) ) break;
             }
@@ -382,7 +382,7 @@ bool redirect_rule::redirect_query(cleandns_udpsocket *client, const string &dom
         bool _ret = false;
         cleandns_udpsocket _so;
 
-        for ( int s = 0; s < m_redirect_servers.size(); ++s ) {
+        for ( int s = 0; s < (int)m_redirect_servers.size(); ++s ) {
             _so.close();
             server_info _si = m_redirect_servers[s];
             if ( !_so.connect(_si.first, _si.second) ) continue;

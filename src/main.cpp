@@ -316,7 +316,7 @@ int main( int argc, char *argv[] ) {
     }
 
     bool _is_client = false;
-    bool _is_server = false;
+    // bool _is_server = false;
 
     // Check work-mode
     if ( _config->contains_key("work-mode") ) {
@@ -324,7 +324,7 @@ int main( int argc, char *argv[] ) {
         if ( _mode == "client" ) {
             _is_client = true;
         } else if ( _mode == "server" ) {
-            _is_server = true;
+            _is_client = false;
         } else {
             cerr << "error work-mode." << endl;
             close_config_file(_config);
