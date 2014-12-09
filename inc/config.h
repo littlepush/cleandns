@@ -234,8 +234,10 @@ static inline void split_string( const std::string &value,
             _lastPos = (_nextCarry < _lastPos) ? _nextCarry : _lastPos;
         }
         if ( _lastPos == std::string::npos ) _lastPos = value.size();
-        std::string _com = value.substr( _pos, _lastPos - _pos );
-        component.push_back(_com);
+        if ( _lastPos > _pos ) {
+            std::string _com = value.substr( _pos, _lastPos - _pos );
+            component.push_back(_com);
+        }
         _pos = _lastPos + 1;
     } while( _pos < value.size() );
 }

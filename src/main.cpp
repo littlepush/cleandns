@@ -53,8 +53,6 @@
 redirect_rule *_default_rule;
 vector<redirect_rule *> _rules;
 
-unsigned int _server_port = 53;
-
 #if _DEF_WIN32
 void set_signal_handler( ) {
 }
@@ -137,10 +135,18 @@ void cleandns_udp_client_redirector( cleandns_thread **thread )
 void cleandns_udp_client_worker( cleandns_thread **thread )
 {
     cleandns_udpsocket _udp_svr_so;
+    // Get the config
+    config_section *_config = (config_section *)((*thread)->user_info);
+    // port
+    unsigned int _server_port = 53;
+    if ( _config->contains_key("port") ) {
+        _server_port = atoi((*_config)["port"].c_str());
+    }
+
     int _time = 1;
     bool _st = false;
     for ( int i = 0; i < 6; ++i ) {
-        if ( !_udp_svr_so.listen(53) ) {
+        if ( !_udp_svr_so.listen(_server_port) ) {
             cerr << "cleandns: failed to listen on 53 for udp worker." << endl;
             sleep( _time *= 2 );
         }
@@ -197,10 +203,18 @@ void cleandns_tcp_client_redirector( cleandns_thread **thread )
 void cleandns_tcp_client_worker( cleandns_thread **thread )
 {
     cleandns_tcpsocket _tcp_svr_so;
+    // Get the config
+    config_section *_config = (config_section *)((*thread)->user_info);
+    // port
+    unsigned int _server_port = 53;
+    if ( _config->contains_key("port") ) {
+        _server_port = atoi((*_config)["port"].c_str());
+    }
+
     int _time = 1;
     bool _st = false;
     for ( int i = 0; i < 6; ++i ) {
-        if ( !_tcp_svr_so.listen(53) ) {
+        if ( !_tcp_svr_so.listen(_server_port) ) {
             cerr << "cleandns: failed to listen on 53 for tcp worker." << endl;
             sleep( _time *= 2 );
         }
@@ -251,6 +265,13 @@ void cleandns_tcp_server_redirector( cleandns_thread **thread )
 void cleandns_tcp_server_worker( cleandns_thread **thread )
 {
     cleandns_tcpsocket _tcp_svr_so;
+    // Get the config
+    config_section *_config = (config_section *)((*thread)->user_info);
+    // port
+    unsigned int _server_port = 53;
+    if ( _config->contains_key("port") ) {
+        _server_port = atoi((*_config)["port"].c_str());
+    }
     if ( !_tcp_svr_so.listen(_server_port) ) {
         cerr << "cleandns: failed to listen on " << _server_port << "." << endl;
         exit(3);
@@ -333,8 +354,10 @@ int main( int argc, char *argv[] ) {
     } else {
         _is_client = true;
     }
+
     // Check rules
-    config_section *_redirect_rules = _config->sub_section("redirect-rule");
+    config_section *_redirect_rules = NULL;
+    _redirect_rules = _config->sub_section("redirect-rule");
     if ( _redirect_rules == NULL ) {
         cerr << "error, no redirect rule." << endl;
         close_config_file(_config);
@@ -377,26 +400,55 @@ int main( int argc, char *argv[] ) {
     }
 
     if ( _is_client ) {
-        //cleandns_udp_client_worker
-        _client_udp_worker_thread = new cleandns_thread( cleandns_udp_client_worker );
-        _client_udp_worker_thread->start_thread();
+        bool _start_tcp = false;
+        bool _start_udp = false;
 
-        _client_tcp_worker_thread = new cleandns_thread( cleandns_tcp_client_worker );
-        _client_tcp_worker_thread->start_thread();
-    } else {
-        // port
-        if ( _config->contains_key("port") ) {
-            _server_port = atoi((*_config)["port"].c_str());
+        if ( _config->contains_key("protocol") ) {
+            string _protocol = (*_config)["protocol"];
+            vector< string > _pcl_list;
+            split_string( _protocol, "|", _pcl_list );
+            for ( unsigned int i = 0; i < _pcl_list.size(); ++i ) {
+                if ( _pcl_list[i] == "tcp" ) {
+                    _start_tcp = true;
+                    continue;
+                }
+                if ( _pcl_list[i] == "udp" ) {
+                    _start_udp = true;
+                    continue;
+                }
+            }
+        } else {
+            _start_tcp = true;
+            _start_udp = true;
         }
+
+        //cleandns_udp_client_worker
+        if ( _start_udp ) {
+            _client_udp_worker_thread = new cleandns_thread( cleandns_udp_client_worker );
+            _client_udp_worker_thread->user_info = _config;
+            _client_udp_worker_thread->start_thread();
+        }
+        if ( _start_tcp ) {
+            _client_tcp_worker_thread = new cleandns_thread( cleandns_tcp_client_worker );
+            _client_tcp_worker_thread->user_info = _config;
+            _client_tcp_worker_thread->start_thread();
+        }
+    } else {
         _server_tcp_worker_thread = new cleandns_thread( cleandns_tcp_server_worker );
+        _server_tcp_worker_thread->user_info = _config;
         _server_tcp_worker_thread->start_thread();
+    }
+
+    // Wait for close signal and exit
+    if ( _server_tcp_worker_thread != NULL || 
+         _client_tcp_worker_thread != NULL || 
+         _client_tcp_worker_thread != NULL ) {
+        wait_for_exit_signal();
     }
 
     // Done
     close_config_file(_config);
 
-    // Wait for close signal and exit
-    wait_for_exit_signal();
     if ( _is_client ) {
         if ( _client_udp_worker_thread ) _client_udp_worker_thread->stop_thread();
         if ( _client_tcp_worker_thread ) _client_tcp_worker_thread->stop_thread();
