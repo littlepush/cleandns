@@ -128,6 +128,7 @@
 #include <unistd.h>
 #include <signal.h>
 #define gettid()    syscall(__NR_gettid)
+#include <syslog.h>
 #endif
 
 // For Mac OS X
@@ -135,6 +136,7 @@
 #include <libkern/OSAtomic.h>
 #include <unistd.h>
 #include <sys/syscall.h>
+#include <syslog.h>
 #define gettid()    syscall(SYS_gettid)
 #endif
 

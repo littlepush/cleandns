@@ -44,6 +44,45 @@
 
 #define _split_string           split_string
 
+// Dump binary package with HEX
+void __log_dump_hex( const char *data, unsigned int length )
+{
+    const static unsigned int _cPerLine = 16;     // 16 Characters Per-Line.
+    const static unsigned int _addrSize = sizeof(intptr_t) * 2 + 2;
+    const static unsigned int _bufferSize = _cPerLine * 4 + 3 + _addrSize + 2;
+    unsigned int _Lines = ( length / _cPerLine ) + 
+        (unsigned int)((length % _cPerLine) > 0);
+    unsigned int _LastLineSize = ( _Lines == 1 ) ? length : length % _cPerLine;
+    if ( _LastLineSize == 0 ) _LastLineSize = _cPerLine;
+    //char _BufferLine[ _bufferSize ];
+    char *_BufferLine = (char *)malloc(sizeof(char) * _bufferSize );
+
+    for ( unsigned int _l = 0; _l < _Lines; ++_l ) {
+        unsigned int _LineSize = ( _l == _Lines - 1 ) ? _LastLineSize : _cPerLine;
+        ::memset( _BufferLine, 0x20, _bufferSize );
+        if ( sizeof(intptr_t) == 4 )
+            sprintf( _BufferLine, "%08x: ", (Uint32)(intptr_t)(_Data + (_l * _cPerLine)) );
+        else
+            sprintf( _BufferLine, "%016lx: ", (unsigned long)(intptr_t)(_Data + (_l * _cPerLine)) );
+        for ( unsigned int _c = 0; _c < _LineSize; ++_c ) {
+            sprintf( _BufferLine + _c * 3 + _addrSize, "%02x ", 
+                (unsigned char)_Data[_l * _cPerLine + _c]
+            );
+            _BufferLine[ (_c + 1) * 3 + _addrSize ] = ' ';  // Reset the '\0'
+            _BufferLine[ _cPerLine * 3 + 1 + _c + _addrSize + 1 ] = 
+                ( (isprint((unsigned char)(_Data[_l * _cPerLine + _c])) ?
+                    _Data[_l * _cPerLine + _c] : '.')
+                );
+        }
+        _BufferLine[ _cPerLine * 3 + _addrSize ] = '\t';
+        _BufferLine[ _cPerLine * 3 + _addrSize + 1] = '|';
+        _BufferLine[ _bufferSize - 3 ] = '|';
+        _BufferLine[ _bufferSize - 2 ] = '\0';
+        syslog(LOG_INFO, "%s\n", _BufferLine );
+    }
+
+    free(_BufferLine);
+}
 // Get the domain from the dns querying package.
 // The query domain seg will store the domain in the following format:
 // [length:1Byte][component][length:1Byte][component]...
@@ -372,6 +411,7 @@ bool redirect_rule::redirect_query(cleandns_udpsocket *client, const string &dom
             if ( !_so.write_data(incoming) ) continue;
             string _outcoming;
             if ( !_so.read_data(_outcoming, 5000) ) continue;
+            __log_dump_hex( _outcoming.c_str(), _outcoming.size() );
             _so.close();
             client->write_data(_outcoming);
             _ret = true;
@@ -389,6 +429,7 @@ bool redirect_rule::redirect_query(cleandns_udpsocket *client, const string &dom
             if ( !_so.write_data(incoming) ) continue;
             string _outcoming;
             if ( !_so.read_data(_outcoming, 5000) ) continue;
+            __log_dump_hex( _outcoming.c_str(), _outcoming.size() );
             _so.close();
             client->write_data(_outcoming);
             _ret = true;
