@@ -83,6 +83,15 @@ void __log_dump_hex( const char *data, unsigned int length )
 
     free(_BufferLine);
 }
+
+bool dns_response_check( const char *pkg, unsigned int len )
+{
+	if ( len < sizeof(struct dns_package) ) return false;
+	struct dns_package _dnsPkg;
+	memcpy(&_dnsPkg, pkg, sizeof(struct dns_package));
+	if ( _dnsPkg.flags.rcode != 0x03 ) return true;
+	return false;
+}
 // Get the domain from the dns querying package.
 // The query domain seg will store the domain in the following format:
 // [length:1Byte][component][length:1Byte][component]...
@@ -221,17 +230,23 @@ bool _domain_match_any_filter_in_subnode( const string &domain, filter_list_node
     if ( blnode->everything ) return true;
     if ( blnode->contain_list.size() ) {
         for ( unsigned int _ctnt = 0; _ctnt < blnode->contain_list.size(); ++_ctnt ) {
-            if ( domain.find(blnode->contain_list[_ctnt].first) != string::npos ) return true;
+            if ( domain.find(blnode->contain_list[_ctnt].first) != string::npos ) {
+				return true;
+			}
         }
     }
     if ( blnode->suffix_list.size() ) {
         for ( unsigned int _sl = 0; _sl < blnode->suffix_list.size(); ++_sl ) {
-            if ( _string_end_with(domain, blnode->suffix_list[_sl].first) ) return true;
+            if ( _string_end_with(domain, blnode->suffix_list[_sl].first) ) {
+				return true;
+			}
         }
     }
     if ( blnode->prefix_list.size() ) {
         for ( unsigned int _pl = 0; _pl < blnode->prefix_list.size(); ++_pl ) {
-            if ( _string_start_with(domain, blnode->prefix_list[_pl].first) ) return true;
+            if ( _string_start_with(domain, blnode->prefix_list[_pl].first) ) {
+				return true;
+			}
         }
     }
     if ( blnode->component_keys.size() ) {
@@ -336,12 +351,12 @@ redirect_rule::redirect_rule(config_section *section)
         // make all domain go through this redirect rule
         this->add_domain_pattern("*");
     } else {
-        section->begin_loop();
-        config_section::_tnode _node = section->current_node();
-        while( _node != section->end() ) {
+        _filter_list->begin_loop();
+        config_section::_tnode _node = _filter_list->current_node();
+        while( _node != _filter_list->end() ) {
             this->add_domain_pattern(_node->first);
-            section->next_node();
-            _node = section->current_node();
+            _filter_list->next_node();
+            _node = _filter_list->current_node();
         }
     }
 }
@@ -407,12 +422,18 @@ bool redirect_rule::redirect_query(cleandns_udpsocket *client, const string &dom
                 if ( _so.setup_proxy(_pi.first, _pi.second) ) break;
             }
             server_info _si = m_redirect_servers[s];
+			syslog(LOG_INFO, "%s use tcp redirect to server: %s:%d\n", domain.c_str(), _si.first.c_str(), _si.second);
             if ( !_so.connect(_si.first, _si.second) ) continue;
             if ( !_so.write_data(incoming) ) continue;
             string _outcoming;
             if ( !_so.read_data(_outcoming, 5000) ) continue;
-            __log_dump_hex( _outcoming.c_str(), _outcoming.size() );
             _so.close();
+
+			if ( dns_response_check(_outcoming.c_str(), _outcoming.size()) == false ) {
+				syslog(LOG_INFO, "%s query failed\n", domain.c_str());
+				continue;
+			}
+
             client->write_data(_outcoming);
             _ret = true;
             break;
@@ -425,12 +446,18 @@ bool redirect_rule::redirect_query(cleandns_udpsocket *client, const string &dom
         for ( int s = 0; s < (int)m_redirect_servers.size(); ++s ) {
             _so.close();
             server_info _si = m_redirect_servers[s];
+			syslog(LOG_INFO, "%s use udp redirect to server: %s:%d\n", domain.c_str(), _si.first.c_str(), _si.second);
             if ( !_so.connect(_si.first, _si.second) ) continue;
             if ( !_so.write_data(incoming) ) continue;
             string _outcoming;
             if ( !_so.read_data(_outcoming, 5000) ) continue;
-            __log_dump_hex( _outcoming.c_str(), _outcoming.size() );
             _so.close();
+
+			if ( dns_response_check(_outcoming.c_str(), _outcoming.size()) == false ) {
+				syslog(LOG_INFO, "%s query failed\n", domain.c_str());
+				continue;
+			}
+
             client->write_data(_outcoming);
             _ret = true;
             break;
