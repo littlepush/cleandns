@@ -41,6 +41,8 @@
 */
 
 #include "socket.h"
+#include <errno.h>
+#include <syslog.h>
 
 // Get localhost's computer name on LAN.
 void network_get_localhost_name( string &hostname )
@@ -77,7 +79,10 @@ void network_peer_info_from_socket( const SOCKET_T hSo, u_int32_t &ipaddr, u_int
     {
         port = ntohs(_addr.sin_port);
         ipaddr = _addr.sin_addr.s_addr;
-    }
+		syslog(LOG_INFO, "peer info: %d, %d\n", ipaddr, port );
+    } else {
+		syslog(LOG_INFO, "failed to get peer info: %s\n", strerror(errno));
+	}
 }
 
 // Check the specified socket's status according to the option.

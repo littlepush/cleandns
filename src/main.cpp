@@ -48,6 +48,7 @@
 #include "udpsocket.h"
 #include "cf.h"
 #include <fstream>
+#include <syslog.h>
 
 // Default redirect rule
 redirect_rule *_default_rule;
@@ -114,6 +115,14 @@ void cleandns_udp_client_redirector( cleandns_thread **thread )
             cerr << "cleandns: failed to get domain info from the package.";
             break;
         }
+
+		// Log
+		u_int32_t _ipaddr, _port;
+		network_peer_info_from_socket( _client_socket->m_socket, _ipaddr, _port );
+		string _ipstr;
+		network_int_to_ipaddress( _ipaddr, _ipstr );
+		syslog(LOG_INFO, "UDP client<%s:%d> query domain %s\n", _ipstr.c_str(), _port, _domain.c_str() );
+
         bool _status = false;
         for ( unsigned int i = 0; i < _rules.size(); ++i ) {
             if ( !_rules[i]->redirect_query(_client_socket, _domain, _client_socket->m_data) ) continue;
@@ -184,6 +193,14 @@ void cleandns_tcp_client_redirector( cleandns_thread **thread )
             cerr << "cleandns: failed to get domain info from the package.";
             break;
         }
+
+		// Log
+		u_int32_t _ipaddr, _port;
+		network_peer_info_from_socket( _client_socket->m_socket, _ipaddr, _port );
+		string _ipstr;
+		network_int_to_ipaddress( _ipaddr, _ipstr );
+		syslog(LOG_INFO, "TCP client<%s:%d> query domain %s\n", _ipstr.c_str(), _port, _domain.c_str() );
+
         bool _status = false;
         for ( unsigned int i = 0; i < _rules.size(); ++i ) {
             if ( !_rules[i]->redirect_query(_client_socket, _domain, _buffer) ) continue;
@@ -399,6 +416,7 @@ int main( int argc, char *argv[] ) {
         }
     }
 
+	openlog("cleandns.log", LOG_PID|LOG_CONS, LOG_USER);
     if ( _is_client ) {
         bool _start_tcp = false;
         bool _start_udp = false;
@@ -455,6 +473,7 @@ int main( int argc, char *argv[] ) {
     } else {
         if ( _server_tcp_worker_thread ) _server_tcp_worker_thread->stop_thread();
     }
+	closelog();
 
     return 0;
 }
