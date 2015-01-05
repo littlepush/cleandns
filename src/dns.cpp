@@ -61,17 +61,17 @@ void __log_dump_hex( const char *data, unsigned int length )
         unsigned int _LineSize = ( _l == _Lines - 1 ) ? _LastLineSize : _cPerLine;
         ::memset( _BufferLine, 0x20, _bufferSize );
         if ( sizeof(intptr_t) == 4 )
-            sprintf( _BufferLine, "%08x: ", (Uint32)(intptr_t)(_Data + (_l * _cPerLine)) );
+            sprintf( _BufferLine, "%08x: ", (unsigned int)(intptr_t)(data + (_l * _cPerLine)) );
         else
-            sprintf( _BufferLine, "%016lx: ", (unsigned long)(intptr_t)(_Data + (_l * _cPerLine)) );
+            sprintf( _BufferLine, "%016lx: ", (unsigned long)(intptr_t)(data + (_l * _cPerLine)) );
         for ( unsigned int _c = 0; _c < _LineSize; ++_c ) {
             sprintf( _BufferLine + _c * 3 + _addrSize, "%02x ", 
-                (unsigned char)_Data[_l * _cPerLine + _c]
+                (unsigned char)data[_l * _cPerLine + _c]
             );
             _BufferLine[ (_c + 1) * 3 + _addrSize ] = ' ';  // Reset the '\0'
             _BufferLine[ _cPerLine * 3 + 1 + _c + _addrSize + 1 ] = 
-                ( (isprint((unsigned char)(_Data[_l * _cPerLine + _c])) ?
-                    _Data[_l * _cPerLine + _c] : '.')
+                ( (isprint((unsigned char)(data[_l * _cPerLine + _c])) ?
+                    data[_l * _cPerLine + _c] : '.')
                 );
         }
         _BufferLine[ _cPerLine * 3 + _addrSize ] = '\t';
