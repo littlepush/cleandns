@@ -40,65 +40,16 @@
     ENJOY YOUR LIFE AND BE FAR AWAY FROM BUGS.
 */
 
-#include "config.h"
-#include "dns.h"
-#include "lock.h"
 #include "thread.h"
-#include "tcpsocket.h"
-#include "udpsocket.h"
-#include "cf.h"
-#include <fstream>
-#include <syslog.h>
+#include "log.h"
+#include "json/json.h"
+#include "socketlite.h"
 
 // Default redirect rule
 redirect_rule *_default_rule;
 vector<redirect_rule *> _rules;
 
-#if _DEF_WIN32
-void set_signal_handler( ) {
-}
-void wait_for_exit_signal( )
-{
-    char _c = getc( );
-}
-#else
-// Global Signal
-struct __global_signal {
-    static cleandns_semaphore & __wait_sem( ) {
-        static cleandns_semaphore _sem(0, 1);
-        return _sem;
-    }
-};
-
-void __handle_signal( int _sig ) {
-    if (SIGTERM == _sig || SIGINT == _sig || SIGQUIT == _sig) {
-        __global_signal::__wait_sem().give();          
-    }
-}
-void set_signal_handler( ) {
-    // Hook the signal
-#ifdef __APPLE__
-    signal(SIGINT, __handle_signal);
-#else
-    sigset_t sgset, osgset;
-    sigfillset(&sgset);
-    sigdelset(&sgset, SIGTERM);
-    sigdelset(&sgset, SIGINT);
-    sigdelset(&sgset, SIGQUIT);
-    sigdelset(&sgset, 11);
-    sigprocmask(SIG_SETMASK, &sgset, &osgset);
-    signal(SIGTERM, __handle_signal);
-    signal(SIGINT, __handle_signal);
-    signal(SIGQUIT, __handle_signal);    
-#endif      
-}
-void wait_for_exit_signal( )
-{
-    // Wait for exit signal
-    __global_signal::__wait_sem().get( );     
-}
-#endif
-
+/*
 void cleandns_udp_client_redirector( cleandns_thread **thread )
 {
     cleandns_udpsocket *_client_socket = (cleandns_udpsocket *)(*thread)->user_info;
@@ -301,7 +252,25 @@ void cleandns_tcp_server_worker( cleandns_thread **thread )
         _redirect_thread->start_thread();
     }
 }
+*/
 
+void cleandns_help() {
+    cout << "cleandns -c [config_file]" << endl;
+    cout << "    default config file is /etc/cleandns.json" << endl;
+    cout << "cleandns -[vh]" << endl;
+    cout << "    print this message or version info"
+    cout << "cleandns --client/server -o [options]" << endl;
+    cout << "    port=[port number]" << endl;
+    cout << "        In default the port should be 53 in client mode and 1053 in server mode." << endl;
+    cout << "    parent=[ip address]" << endl;
+    cout << "        Redirect any request to the parent server in default" << endl;
+    cout << "    filter=[file]" << endl;
+    cout << "        load a filter file, use cleandns --filter-help to see detail information" << endl;
+}
+
+void cleandns_filterhelp() {
+    cout << ""
+}
 void _cleandns_version_info() {
     printf( "cleandns version: %s\n", VERSION );
     printf( "target: %s\n", TARGET );
