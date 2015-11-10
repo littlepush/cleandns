@@ -35,9 +35,11 @@ namespace cpputility {
     }
     void set_signal_handler() {
         __g_mutex().lock();
-    #if SL_TARGET_MAC
-        signal(SIGINT, __h_signal); 
-    #elif SL_TARGET_LINUX
+    #ifdef __APPLE__
+        signal(SIGINT, __h_signal);
+    #elif ( defined WIN32 | defined _WIN32 | defined WIN64 | defined _WIN64 )
+        // nothing
+    #else
         sigset_t sgset, osgset;
         sigfillset(&sgset);
         sigdelset(&sgset, SIGTERM); 

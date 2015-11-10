@@ -1,0 +1,8 @@
+{
+    "service" : {
+        "daemon" : false,
+        "port" : 1053,
+        "loglv" : "debug",
+        "logpath" : "stdout"
+    }
+}

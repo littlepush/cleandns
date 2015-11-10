@@ -1,0 +1,30 @@
+cleandns -c [config_file]
+    default config file is /etc/cleandns.json
+cleandns -[vh]
+    print this message or version info
+cleandns -o [options]
+    The following is service options
+    port=[port number]
+        In default the port should be 53 in client mode and 1053 in server mode.
+    protocol=[tcp/udp/all]
+        the protocol the `port` to listen on. In default is `all`
+    logpath=[path/syslog/stdout/stderr]
+        the output source of the log, can be `syslog`, `stdout`, `stderr` or the direct file path.
+    loglevel=[debug|info|notice|warning|error|critical|alert|emergancy]
+        the log level, same as syslog, any level less than `loglevel` will not be outputed.
+    daemon=[true|false]
+        wether to start as a daemon service. default is true
+    pidfile=[/var/run/cleandns/pid]
+        the pid file path, default is /var/run/cleandns/pid
+
+    The following is default filter's options
+    parent=[ip address]
+        Redirect any request to the parent server in default
+    parent-port=[server port]
+        In default the parent port should be 53, specified it if the parent use not the default port
+    redirect-protocol=[tcp/udp/inhiert]
+        Redirect the request to parent use specified protocol, in default is `inhiert`
+    socks5=[ipaddress:port]
+        Use socks5 proxy and force `tcp` to redirect the query request.
+    filter=[file]
+        load a filter file, use cleandns --filter-help to see detail information. can set multiple filter files

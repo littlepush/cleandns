@@ -134,6 +134,9 @@ namespace cpputility {
 			lock_guard<mutex> _l(g_logmutex);
 			g_logstatus = false;
 		} while ( false );
+		
+		if ( g_logthread == NULL ) return;
+
 		g_logthread->join();
 		delete g_logthread;
 		g_logthread = NULL;

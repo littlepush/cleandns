@@ -40,253 +40,297 @@
     ENJOY YOUR LIFE AND BE FAR AWAY FROM BUGS.
 */
 
+/*
+README.md
+----
+
+V0.4 README
+===
+
+This is a new version of the cleandns service. In this version, I will make cleandns to support local
+dns configuration, auto reload config file and internal web config interface
+
+Roadmap
+===
+
+1. 0.4.0: Re-write the whole project with new socketlite library and jsoncpp library. Format the result and dump to specified log file. One can write a script to add the result to some white/black list of iptable or firewall rules.
+2. 0.4.1: Auto reload config file with a --reload command. In this version I will make it listens to a file socket to accept any local command input
+3. 0.4.2: Internal Web Config Interface. cleandns will have a tiny http web service to accept modify action to the configuration file.
+
+*/
+
 #include "thread.h"
 #include "log.h"
 #include "json/json.h"
+#include "json/json-forwards.h"
 #include "socketlite.h"
+#include "base64.h"
+#include "string_format.hpp"
 
+#include <algorithm>
+
+using namespace cpputility;
+
+#ifdef CLRD_AUTO_GENERATE_DOC
+#include "doc_header_auto_generate.h"
+#endif
+
+typedef struct tag_clrd_ip {
+    string          ip;
+
+    tag_clrd_ip() {}
+    tag_clrd_ip(const string &ipaddr) : ip(ipaddr) {}
+    tag_clrd_ip(const tag_clrd_ip& rhs) : ip(rhs.ip) {}
+    tag_clrd_ip & operator = (const string &ipaddr) {
+        ip = ipaddr; return *this;
+    }
+
+    operator uint32_t() const {
+        vector<string> _components;
+        string _clean_ipstring(this->ip);
+        trim(_clean_ipstring);
+        // Split the ip address
+        split_string(_clean_ipstring, ".", _components);
+        if ( _components.size() != 4 ) return 0;
+
+        uint32_t _ipaddr = 0;
+        for ( int i = 0; i < 4; ++i ) {
+            int _i = stoi(_components[i], nullptr, 10);
+            if ( _i < 0 || _i > 255 ) return 0;
+            _ipaddr |= (_i << ((3 - i) * 8));
+        }
+        return _ipaddr;
+    }
+} clrd_ip;
+
+typedef struct tag_clrd_peerinfo {
+    clrd_ip         ip;
+    uint16_t        port;
+
+    void parse_peerinfo_string(const string &format_string) {
+        vector<string> _components;
+        split_string(format_string, ":", _components);
+        if ( _components.size() != 2 ) return;
+        ip = _components[0];
+        stoi(_components[1], nullptr, 10);
+    }
+
+    tag_clrd_peerinfo() {}
+    tag_clrd_peerinfo(const string &format_string) : port(0) {
+        parse_peerinfo_string(format_string);
+    }
+    tag_clrd_peerinfo(const string &ipaddr, uint16_t p) : ip(ipaddr), port(p) { }
+    tag_clrd_peerinfo(const tag_clrd_peerinfo& rhs):ip(rhs.ip), port(rhs.port) { }
+    tag_clrd_peerinfo & operator = (const tag_clrd_peerinfo& rhs) {
+        ip = rhs.ip;
+        port = rhs.port;
+        return *this;
+    }
+
+    operator bool() const { return port > 0 && port <= 65535; }
+} clrd_peerinfo;
+
+typedef enum {
+    clrd_protocol_inhiert   = 0,
+    clrd_protocol_tcp       = 0x01,
+    clrd_protocol_udp       = 0x02,
+    clrd_protocol_all       = clrd_protocol_tcp | clrd_protocol_udp,
+} clrd_protocol_t;
+
+clrd_protocol_t clrd_protocol_from_string(const string &protocol_string) {
+    string _upcase = protocol_string;
+    std::transform(_upcase.begin(), _upcase.end(), _upcase.begin(), ::toupper);
+    if ( _upcase == "INHIERT" ) return clrd_protocol_inhiert;
+    if ( _upcase == "TCP" ) return clrd_protocol_tcp;
+    if ( _upcase == "UDP" ) return clrd_protocol_udp;
+    if ( _upcase == "ALL" ) return clrd_protocol_all;
+    return clrd_protocol_inhiert;
+}
+
+static const Json::Value& check_key_and_get_value(const Json::Value& node, const string &key) {
+    if ( node.isMember(key) == false ) {
+        ostringstream _oss;
+        _oss << "missing \"" << key << "\"" << endl;
+        Json::FastWriter _jsonWriter;
+        _oss << "check on config node: " << _jsonWriter.write(node) << endl;
+        throw( runtime_error(_oss.str()) );
+    }
+    return node[key];
+}
+
+static const Json::Value& check_key_with_default(const Json::Value& node, const string &key, const Json::Value &defaultValue) {
+    if ( node.isMember(key) == false ) return defaultValue;
+    return node[key];
+}
+
+class clrd_filter {
+protected:
+    clrd_protocol_t         protocol_;
+    clrd_peerinfo           parent_;
+    clrd_peerinfo           socks5_;
+public: 
+
+    const clrd_protocol_t &         protocol;
+    const clrd_peerinfo &           parent;
+    const clrd_peerinfo &           socks5;
+
+    clrd_filter() : protocol(protocol_), parent(parent_), socks5(socks5_) { 
+        // // Default
+        // parent_.ip = check_key_and_get_value(config_node, "parent").asString();
+        // parent_.port = check_key_with_default(config_node, "parent-port", Json::Value(53)).asUInt();
+        // protocol_ = clrd_protocol_from_string(
+        //     check_key_with_default(config_node, "redirect-protocol", Json::Value("inhiert")).asString());
+        // socks5_ = clrd_peerinfo(
+        //     check_key_with_default(config_node, "socks5", Json::Value("0.0.0.0:0")).asString()
+        //     );
+    }
+    virtual ~clrd_filter() = 0;
+
+    operator bool() const { return parent_; }
+    bool go_through_proxy() const { return socks5_; }
+};
+
+class clrd_filter_local : clrd_filter {
+
+};
+
+class clrd_filter_redirect : clrd_filter {
+
+};
+
+class clrd_config_service {
+protected:
+    clrd_protocol_t         service_protocol_;
+    uint16_t                port_;
+    string                  logpath_;
+    cp_log_level            loglv_;
+    bool                    daemon_;
+    string                  pidfile_;
+
+    cp_log_level _loglv_from_string(const string& loglv_string) {
+        string _lowercase = loglv_string;
+        std::transform(_lowercase.begin(), _lowercase.end(), _lowercase.begin(), ::tolower);
+        cp_log_level _lv = log_info;    // default is info
+        if ( loglv_string == "emergancy" ) {
+            _lv = log_emergancy;
+        } else if ( loglv_string == "alert" ) {
+            _lv = log_alert;
+        } else if ( loglv_string == "critical" ) {
+            _lv = log_critical;
+        } else if ( loglv_string == "error" ) {
+            _lv = log_error;
+        } else if ( loglv_string == "warning" ) {
+            _lv = log_warning;
+        } else if ( loglv_string == "notice" ) {
+            _lv = log_notice;
+        } else if ( loglv_string == "info" ) {
+            _lv = log_info;
+        } else if ( loglv_string == "debug" ) {
+            _lv = log_debug;
+        }
+        return _lv;
+    }
+public:
+
+    // const reference
+    const clrd_protocol_t & service_protocol;
+    const uint16_t &        port;
+    const string &          logpath;
+    const cp_log_level &    loglv;
+    const bool &            daemon;
+    const string &          pidfile;
+
+    clrd_config_service( ) :
+        service_protocol(service_protocol_),
+        port(port_),
+        logpath(logpath_),
+        loglv(loglv_),
+        daemon(daemon_),
+        pidfile(pidfile_){ /* nothing */ }
+    virtual ~clrd_config_service() { /* nothing */ }
+
+    clrd_config_service( const Json::Value& config_node ) :
+        service_protocol(service_protocol_),
+        port(port_),
+        logpath(logpath_),
+        loglv(loglv_),
+        daemon(daemon_),
+        pidfile(pidfile_) 
+    {
+        // Service
+        service_protocol_ = clrd_protocol_from_string(
+            check_key_with_default(config_node, "protocol", "all").asString());
+        port_ = check_key_with_default(config_node, "port", 53).asUInt();
+        logpath_ = check_key_with_default(config_node, "logpath", "syslog").asString();
+        loglv_ = _loglv_from_string(
+            check_key_with_default(config_node, "loglevel", "info").asString()
+            );
+        daemon_ = check_key_with_default(config_node, "daemon", true).asBool();
+        pidfile_ = check_key_with_default(config_node, "pidfile", "/var/run/cleandns/pid").asString();
+    }
+
+    void start_log() const {
+        // Stop the existed log
+        cp_log_stop();
+        // Check system log path
+        if ( logpath_ == "syslog" ) {
+            cp_log_start(loglv_);
+        } else if ( logpath_ == "stdout" ) {
+            cp_log_start(stdout, loglv_);
+        } else if ( logpath_ == "stderr" ) {
+            cp_log_start(stderr, loglv_);
+        } else {
+            cp_log_start(logpath_, loglv_);
+        }
+    }
+};
 // Default redirect rule
-redirect_rule *_default_rule;
-vector<redirect_rule *> _rules;
-
-/*
-void cleandns_udp_client_redirector( cleandns_thread **thread )
-{
-    cleandns_udpsocket *_client_socket = (cleandns_udpsocket *)(*thread)->user_info;
-    if ( _client_socket == NULL ) {
-        delete (*thread);
-        *thread = NULL;
-        return;
-    }
-
-    do {
-        string _domain;
-        int _ret = dns_get_domain(_client_socket->m_data.c_str(), _client_socket->m_data.size(), _domain);
-        if ( _ret != 0 ) {
-            cerr << "cleandns: failed to get domain info from the package.";
-            break;
-        }
-
-		// Log
-		u_int32_t _ipaddr, _port;
-		network_peer_info_from_socket( _client_socket->m_socket, _ipaddr, _port );
-		string _ipstr;
-		network_int_to_ipaddress( _ipaddr, _ipstr );
-		syslog(LOG_INFO, "UDP client<%s:%d> query domain %s\n", _ipstr.c_str(), _port, _domain.c_str() );
-
-        bool _status = false;
-        for ( unsigned int i = 0; i < _rules.size(); ++i ) {
-            if ( !_rules[i]->redirect_query(_client_socket, _domain, _client_socket->m_data) ) continue;
-            _status = true; 
-            break;
-        }
-
-        if ( !_status ) {
-            _default_rule->redirect_query(_client_socket, _domain, _client_socket->m_data );
-        }
-    } while ( false );
-
-    // Release result
-    delete _client_socket;
-    delete (*thread);
-    *thread = NULL;
-}
-
-void cleandns_udp_client_worker( cleandns_thread **thread )
-{
-    cleandns_udpsocket _udp_svr_so;
-    // Get the config
-    config_section *_config = (config_section *)((*thread)->user_info);
-    // port
-    unsigned int _server_port = 53;
-    if ( _config->contains_key("port") ) {
-        _server_port = atoi((*_config)["port"].c_str());
-    }
-
-    int _time = 1;
-    bool _st = false;
-    for ( int i = 0; i < 6; ++i ) {
-        if ( !_udp_svr_so.listen(_server_port) ) {
-            cerr << "cleandns: failed to listen on 53 for udp worker." << endl;
-            sleep( _time *= 2 );
-        }
-        _st = true;
-        break;
-    }
-    if ( _st == false ) {
-        cerr << "cleandns: failed to listen on 53 for udp worker, exit." << endl;
-        exit(1);
-    }
-    while( (*thread)->thread_status() ) {
-        cleandns_udpsocket *_client = _udp_svr_so.get_client();
-        if ( _client == NULL ) continue;
-        cleandns_thread *_redirect_thread = new cleandns_thread(cleandns_udp_client_redirector);
-        _redirect_thread->user_info = _client;
-        _redirect_thread->start_thread();
-    }
-}
-
-void cleandns_tcp_client_redirector( cleandns_thread **thread )
-{
-    cleandns_tcpsocket *_client_socket = (cleandns_tcpsocket *)(*thread)->user_info;
-    if ( _client_socket == NULL ) {
-        delete (*thread);
-        *thread = NULL;
-        return;
-    }
-
-    do {
-        string _buffer;
-        if ( !_client_socket->read_data( _buffer, 3000 ) ) break;
-        string _domain;
-        int _ret = dns_get_domain(_buffer.c_str(), _buffer.size(), _domain);
-        if ( _ret != 0 ) {
-            cerr << "cleandns: failed to get domain info from the package.";
-            break;
-        }
-
-		// Log
-		u_int32_t _ipaddr, _port;
-		network_peer_info_from_socket( _client_socket->m_socket, _ipaddr, _port );
-		string _ipstr;
-		network_int_to_ipaddress( _ipaddr, _ipstr );
-		syslog(LOG_INFO, "TCP client<%s:%d> query domain %s\n", _ipstr.c_str(), _port, _domain.c_str() );
-
-        bool _status = false;
-        for ( unsigned int i = 0; i < _rules.size(); ++i ) {
-            if ( !_rules[i]->redirect_query(_client_socket, _domain, _buffer) ) continue;
-            _status = true; 
-            break;
-        }
-
-        if ( !_status ) {
-            _default_rule->redirect_query(_client_socket, _domain, _buffer );
-        }
-    } while ( false );
-
-    delete _client_socket;
-    delete (*thread);
-    *thread = NULL;
-}
-void cleandns_tcp_client_worker( cleandns_thread **thread )
-{
-    cleandns_tcpsocket _tcp_svr_so;
-    // Get the config
-    config_section *_config = (config_section *)((*thread)->user_info);
-    // port
-    unsigned int _server_port = 53;
-    if ( _config->contains_key("port") ) {
-        _server_port = atoi((*_config)["port"].c_str());
-    }
-
-    int _time = 1;
-    bool _st = false;
-    for ( int i = 0; i < 6; ++i ) {
-        if ( !_tcp_svr_so.listen(_server_port) ) {
-            cerr << "cleandns: failed to listen on 53 for tcp worker." << endl;
-            sleep( _time *= 2 );
-        }
-        _st = true;
-        break;
-    }
-    if ( _st == false ) {
-        cerr << "cleandns: failed to listen on 53 for tcp worker, exit." << endl;
-        exit(1);
-    }
-    while( (*thread)->thread_status() ) {
-        cleandns_tcpsocket *_client = _tcp_svr_so.get_client();
-        if ( _client == NULL ) continue;
-        cleandns_thread *_redirect_thread = new cleandns_thread(cleandns_tcp_client_redirector);
-        _redirect_thread->user_info = _client;
-        _redirect_thread->start_thread();
-    }
-}
-
-void cleandns_tcp_server_redirector( cleandns_thread **thread )
-{
-    cleandns_tcpsocket *_client_socket = (cleandns_tcpsocket *)(*thread)->user_info;
-    if ( _client_socket == NULL ) {
-        delete (*thread);
-        *thread = NULL;
-        return;
-    }
-
-    do {
-        string _buffer;
-        if ( !_client_socket->read_data( _buffer, 3000 ) ) break;
-        bool _status = false;
-        for ( unsigned int i = 0; i < _rules.size(); ++i ) {
-            if ( !_rules[i]->redirect_udp_query(_client_socket, _buffer) ) continue;
-            _status = true; 
-            break;
-        }
-
-        if ( !_status ) {
-            _default_rule->redirect_udp_query(_client_socket, _buffer );
-        }
-    } while ( false );
-
-    delete _client_socket;
-    delete (*thread);
-    *thread = NULL;
-}
-void cleandns_tcp_server_worker( cleandns_thread **thread )
-{
-    cleandns_tcpsocket _tcp_svr_so;
-    // Get the config
-    config_section *_config = (config_section *)((*thread)->user_info);
-    // port
-    unsigned int _server_port = 53;
-    if ( _config->contains_key("port") ) {
-        _server_port = atoi((*_config)["port"].c_str());
-    }
-    if ( !_tcp_svr_so.listen(_server_port) ) {
-        cerr << "cleandns: failed to listen on " << _server_port << "." << endl;
-        exit(3);
-    }
-    while( (*thread)->thread_status() ) {
-        cleandns_tcpsocket *_client = _tcp_svr_so.get_client();
-        if ( _client == NULL ) continue;
-        cleandns_thread *_redirect_thread = new cleandns_thread(cleandns_tcp_server_redirector);
-        _redirect_thread->user_info = _client;
-        _redirect_thread->start_thread();
-    }
-}
-*/
+//redirect_rule *_default_rule;
+//vector<redirect_rule *> _rules;
 
 void cleandns_help() {
-    cout << "cleandns -c [config_file]" << endl;
-    cout << "    default config file is /etc/cleandns.json" << endl;
-    cout << "cleandns -[vh]" << endl;
-    cout << "    print this message or version info"
-    cout << "cleandns --client/server -o [options]" << endl;
-    cout << "    port=[port number]" << endl;
-    cout << "        In default the port should be 53 in client mode and 1053 in server mode." << endl;
-    cout << "    parent=[ip address]" << endl;
-    cout << "        Redirect any request to the parent server in default" << endl;
-    cout << "    filter=[file]" << endl;
-    cout << "        load a filter file, use cleandns --filter-help to see detail information" << endl;
+#if CLRD_AUTO_GENERATE_DOC
+    static const string _helpDoc = CLEANDNS_DOC_HELP;
+    string _helpString;
+    base64_decode(_helpDoc, _helpString);
+    cout << _helpString << endl;
+#else
+    cout << "Please visit <https://github.com/littlepush/cleandns> for usage." << endl;
+#endif
 }
 
 void cleandns_filterhelp() {
-    cout << ""
+#if CLRD_AUTO_GENERATE_DOC
+    static const string _helpDoc = CLEANDNS_DOC_FILTER_HELP;
+    string _helpString;
+    base64_decode(_helpDoc, _helpString);
+    cout << _helpString << endl;
+#else
+    cout << "Please visit <https://github.com/littlepush/cleandns> for usage." << endl;
+#endif
 }
-void _cleandns_version_info() {
+
+void cleandns_version_info() {
     printf( "cleandns version: %s\n", VERSION );
     printf( "target: %s\n", TARGET );
+
+    // All flags
+#if CLRD_AUTO_GENERATE_DOC
+    cout << "+ ";
+#else
+    cout << "- ";
+#endif
+    cout << "CLRD_AUTO_GENERATE_DOC" << endl;
+
     printf( "Visit <https://github.com/littlepush/cleandns> for more infomation.\n" );
 }
 
-void _cleandns_help_info() {
-    _cleandns_version_info();
-    printf( "cleandns --config <file>\n");
-    printf( "options: \n" );
-    printf( "    --config|-c        The configuration file path\n" );
-}
+clrd_config_service *_g_service_config = NULL;
 
 int main( int argc, char *argv[] ) {
-    const char *_home_path = getenv("HOME");
-    string _config_file = string(_home_path) + "/.cleandns.conf";
+    Json::Value _config_root;
+    Json::Value _config_service;
+    bool _reload_config = false;
 
     if ( argc >= 2 ) {
         int _arg = 1;
@@ -294,20 +338,50 @@ int main( int argc, char *argv[] ) {
             string _command = argv[_arg];
             if ( _command == "-h" || _command == "--help" ) {
                 // Help
-                _cleandns_help_info();
+                cleandns_help();
                 return 0;
             }
             if ( _command == "-v" || _command == "--version" ) {
                 // Version
-                _cleandns_version_info();
+                cleandns_version_info();
+                return 0;
+            }
+            if ( _command == "--filter-help" ) {
+                cleandns_filterhelp();
                 return 0;
             }
             if ( _command == "-c" || _command == "--config" ) {
-                if ( _arg + 1 < argc ) {
-                    _config_file = argv[++_arg];
-                } else {
-                    cerr << "Invalidate argument: " << _command << ", missing parameter." << endl;
+                Json::Reader _config_reader;
+                string _config_path = argv[++_arg];
+                ifstream _config_stream(_config_path, std::ifstream::binary);
+                if ( !_config_reader.parse(_config_stream, _config_root, false ) ) {
+                    cout << _config_reader.getFormattedErrorMessages() << endl;
                     return 1;
+                }
+                _config_service = check_key_and_get_value(_config_root, "service");
+                continue;
+            }
+            if ( _command == "-o" || _command == "--option" ) {
+                string _option_string = argv[++_arg];
+                vector<string> _opt_com;
+                split_string(_option_string, "=", _opt_com);
+                if ( _opt_com.size() != 2 ) {
+                    cerr << "Invalidate option: " << _option_string << "." << endl;
+                    return 2;
+                }
+                if ( _opt_com[0] == "port" ) {
+                    _config_service["port"] = stoi(_opt_com[1], nullptr, 10);
+                } else if ( _opt_com[0] == "daemon" ) {
+                    if ( _opt_com[1] == "true" ) {
+                        _config_service["daemon"] = true;
+                    } else if ( _opt_com[1] == "false" ) {
+                        _config_service["daemon"] = false;
+                    } else {
+                        cerr << "Invalidate option: " << _option_string << "." << endl;
+                        return 2;
+                    }
+                } else {
+                    _config_service[_opt_com[0]] = _opt_com[1];
                 }
                 continue;
             }
@@ -316,134 +390,56 @@ int main( int argc, char *argv[] ) {
         }
     }
 
-    config_section *_config = open_config_file(_config_file.c_str());
-    if ( _config == NULL ) {
-        cerr << "failed to open config file or invalidate configuration." << endl;
-        return 1;
-    }
-
-    bool _is_client = false;
-    // bool _is_server = false;
-
-    // Check work-mode
-    if ( _config->contains_key("work-mode") ) {
-        string _mode = (*_config)["work-mode"];
-        if ( _mode == "client" ) {
-            _is_client = true;
-        } else if ( _mode == "server" ) {
-            _is_client = false;
-        } else {
-            cerr << "error work-mode." << endl;
-            close_config_file(_config);
+    _g_service_config = new clrd_config_service(_config_service);
+    if ( _g_service_config->daemon ) {
+        pid_t _pid = fork();
+        if ( _pid < 0 ) {
+            cerr << "Failed to create child process." << endl;
+            delete _g_service_config;
             return 1;
         }
-    } else {
-        _is_client = true;
+        if ( _pid > 0 ) {
+            // Has create the child process.
+            delete _g_service_config;
+            return 0;
+        }
+
+        if ( setsid() < 0 ) {
+            cerr << "failed to set session leader for child process." << endl;
+            delete _g_service_config;
+            return 3;
+        }
     }
 
-    // Check rules
-    config_section *_redirect_rules = NULL;
-    _redirect_rules = _config->sub_section("redirect-rule");
-    if ( _redirect_rules == NULL ) {
-        cerr << "error, no redirect rule." << endl;
-        close_config_file(_config);
-        return 2;
+    string _pidcmd = "mkdir -p $(dirname " + _g_service_config->pidfile + ")";
+    system(_pidcmd.c_str());
+    FILE *_pidf = fopen(_g_service_config->pidfile.c_str(), "w+");
+    if ( _pidf != NULL ) {
+        fprintf(_pidf, "%d", (uint32_t)getpid());
+        fclose(_pidf);
     }
 
-    pid_t _pid = fork();
-    if ( _pid < 0 ) {
-        cerr << "Failed to create child process." << endl;
-        close_config_file(_config);
-        return 2;
-    }
-    if ( _pid > 0 ) {
-        // Has create the child process.
-        close_config_file(_config);
-        return 0;
-    }
+    // Start the log service at the beginning
+    _g_service_config->start_log();
 
-    if ( setsid() < 0 ) {
-        cerr << "failed to set session leader for child process." << endl;
-        close_config_file(_config);
-        return 3;
-    }
-
+    // Hang current process
     set_signal_handler();
-    cleandns_thread *_client_udp_worker_thread = NULL;
-    cleandns_thread *_client_tcp_worker_thread = NULL;
-    cleandns_thread *_server_tcp_worker_thread = NULL;
 
-    // Load configuration
-    vector< string > _rule_name_list;
-    _redirect_rules->get_sub_section_names(_rule_name_list);
-    for ( unsigned int i = 0; i < _rule_name_list.size(); ++i ) {
-        redirect_rule *_rule = new redirect_rule(_redirect_rules->sub_section(_rule_name_list[i]));
-        if ( _rule->rule_name == "default" ) {
-            _default_rule = _rule;
-        } else {
-            _rules.push_back(_rule);
-        }
-    }
+    // create the main loop thread
+    //thread _main_loop(tiny_distributer_worker);
 
-	openlog("cleandns.log", LOG_PID|LOG_CONS, LOG_USER);
-    if ( _is_client ) {
-        bool _start_tcp = false;
-        bool _start_udp = false;
+    // Wait for kill signal
+    wait_for_exit_signal();
+    remove(_g_service_config->pidfile.c_str());
+    cp_log(log_info, "cleandns receive terminate signal");
 
-        if ( _config->contains_key("protocol") ) {
-            string _protocol = (*_config)["protocol"];
-            vector< string > _pcl_list;
-            split_string( _protocol, "|", _pcl_list );
-            for ( unsigned int i = 0; i < _pcl_list.size(); ++i ) {
-                if ( _pcl_list[i] == "tcp" ) {
-                    _start_tcp = true;
-                    continue;
-                }
-                if ( _pcl_list[i] == "udp" ) {
-                    _start_udp = true;
-                    continue;
-                }
-            }
-        } else {
-            _start_tcp = true;
-            _start_udp = true;
-        }
+    join_all_threads();
 
-        //cleandns_udp_client_worker
-        if ( _start_udp ) {
-            _client_udp_worker_thread = new cleandns_thread( cleandns_udp_client_worker );
-            _client_udp_worker_thread->user_info = _config;
-            _client_udp_worker_thread->start_thread();
-        }
-        if ( _start_tcp ) {
-            _client_tcp_worker_thread = new cleandns_thread( cleandns_tcp_client_worker );
-            _client_tcp_worker_thread->user_info = _config;
-            _client_tcp_worker_thread->start_thread();
-        }
-    } else {
-        _server_tcp_worker_thread = new cleandns_thread( cleandns_tcp_server_worker );
-        _server_tcp_worker_thread->user_info = _config;
-        _server_tcp_worker_thread->start_thread();
-    }
-
-    // Wait for close signal and exit
-    if ( _server_tcp_worker_thread != NULL || 
-         _client_tcp_worker_thread != NULL || 
-         _client_tcp_worker_thread != NULL ) {
-        wait_for_exit_signal();
-    }
-
-    // Done
-    close_config_file(_config);
-
-    if ( _is_client ) {
-        if ( _client_udp_worker_thread ) _client_udp_worker_thread->stop_thread();
-        if ( _client_tcp_worker_thread ) _client_tcp_worker_thread->stop_thread();
-    } else {
-        if ( _server_tcp_worker_thread ) _server_tcp_worker_thread->stop_thread();
-    }
-	closelog();
-
+    //_main_loop.join();
+    //stop_all_services();
+    cp_log(log_info, "tinydst terminated");
+    cp_log_stop();
+    delete _g_service_config;
     return 0;
 }
 

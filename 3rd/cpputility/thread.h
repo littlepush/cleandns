@@ -30,6 +30,7 @@
 #include <condition_variable>
 #include <queue>
 #include <functional>
+#include <csignal>
 
 using namespace std;
 

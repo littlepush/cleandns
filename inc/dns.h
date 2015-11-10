@@ -45,10 +45,6 @@
 #ifndef __CLEAN_DNS_DNS_PACKAGE_H__
 #define __CLEAN_DNS_DNS_PACKAGE_H__
 
-#include "config.h"
-#include "cf.h"
-#include "tcpsocket.h"
-#include "udpsocket.h"
 #include <vector>
 #include <iostream>
 using namespace std;

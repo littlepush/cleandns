@@ -1,0 +1,35 @@
+A filter has 2 modes, one is server redirecting, the another is local domain querying. A filter can be set to be one and only one mode.
+The configuration of a filter is a JSON object contains the following objects:
+
+name        string object
+    the unique identify of a filter. cleandns will create a filter with name 'default' by default. if not set the name of the filter, the configuration will be appended to the `default` filter.
+mode        string object
+    the mode of the filter, can be either `REDIRECT` or `LOCAL`
+after       string object
+    current filter should be check after the specified filter. In default, cleandns will check all `local` mode filters at first, and the `default` filter at the end of the queue.
+server      ip address string
+    the parent redirect server address. only validate when the <mode> is `REDIRECT`
+port        number between 1 - 65535
+    set the port number when the parent server is not listening on 53.
+protocol    string object
+    redirect a query request to parent forcing to use the specified protocol. can choose to be `TCP`, `UDP` or `INHIERT`
+socks5      ipaddress:port string
+    force to use 'TCP' throuth the socks5 proxy to redirect the domain query request.
+
+`REDIRECT` mode options:
+rulelist    string array
+    A domain rule support wildchar(*) in any position of the string with any count. like: *.google.com, *google*.
+    A comain rule can also mark as 'not use this filter' by add a ! in front of the rule string, like: !*.facebook.com, !www.apple.*
+
+`LOCAL` mode options:
+domain      string object
+    the main domain name, like `google.com`
+A           object array
+    A-Record is an object, in the following format:
+    "sub-domain" : "ip address"
+    or
+    "sub-domain" : ["ip address 1", "ip address 2", ...]
+CName       object array
+    CName record is an object, in the following format:
+    "sub-domain" : "full other domain"
+if a sub-domain is not in the local configuration file, will be redirected to the default server in this filter. if not set any default server in this filter, then will try the global default server.
