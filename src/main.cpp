@@ -67,6 +67,7 @@ Roadmap
 #include "base64.h"
 #include "string_format.hpp"
 
+#include <list>
 #include <algorithm>
 
 using namespace cpputility;
@@ -420,7 +421,28 @@ void clrd_global_sort_filter() {
         }
         else _local_filters.push_back(_f);
     }
+    _g_filter_array.clear();
+    _g_filter_array.insert(begin(_g_filter_array), begin(_local_filters), end(_local_filters));
 
+    while ( _redirect_filters.size() > 0 ) {
+        list<lp_clrd_filter > _temp_array;
+        auto _begin = begin(_redirect_filters);
+        auto _last = _begin;
+        for ( ; _begin != end(_redirect_filters); ++_begin ) {
+            if ( _begin->second->after == _last->second->name ) {
+                _last = _begin;
+            }
+        }
+        lp_clrd_filter _f = _last->second;
+        do {
+            _temp_array.push_front(_f);
+            _redirect_filters.erase(_f->name);
+            if ( _f->after.length() == 0 ) break;
+            if ( _redirect_filters.find(_f->after) == end(_redirect_filters) ) break;
+            _f = _redirect_filters[_f->after];
+        } while ( true );
+        _g_filter_array.insert(end(_g_filter_array), begin(_temp_array), end(_temp_array));
+    }
 }
 
 int main( int argc, char *argv[] ) {
@@ -533,6 +555,10 @@ int main( int argc, char *argv[] ) {
                 _g_filter_array.push_back(_f);
                 continue;
             }
+            if ( _command == "-r" || _command == "--reload" ) {
+                _reload_config = true;
+                continue;
+            }
             cerr << "Invalidate argument: " << _command << "." << endl;
             return 1;
         }
@@ -549,6 +575,8 @@ int main( int argc, char *argv[] ) {
 
     // Start service
     _g_service_config = new clrd_config_service(_config_service);
+
+
     if ( _g_service_config->daemon ) {
         pid_t _pid = fork();
         if ( _pid < 0 ) {
