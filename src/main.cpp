@@ -87,13 +87,13 @@ static string untitled_name() {
 The IP object, compatible with std::string and uint32_t
 This is a ipv4 ip address class.
 */
-typedef struct tag_clrd_ip {
+typedef struct tag_clnd_ip {
     string          ip;
 
-    tag_clrd_ip() {}
-    tag_clrd_ip(const string &ipaddr) : ip(ipaddr) {}
-    tag_clrd_ip(const tag_clrd_ip& rhs) : ip(rhs.ip) {}
-    tag_clrd_ip(uint32_t ipaddr) {
+    tag_clnd_ip() {}
+    tag_clnd_ip(const string &ipaddr) : ip(ipaddr) {}
+    tag_clnd_ip(const tag_clnd_ip& rhs) : ip(rhs.ip) {}
+    tag_clnd_ip(uint32_t ipaddr) {
         this->operator =(ipaddr);
     }
     operator uint32_t() const {
@@ -115,11 +115,11 @@ typedef struct tag_clrd_ip {
     operator string&() { return ip; }
 
     // Cast operator
-    tag_clrd_ip & operator = (const string &ipaddr) {
+    tag_clnd_ip & operator = (const string &ipaddr) {
         ip = ipaddr; return *this;
     }
 
-    tag_clrd_ip & operator = (uint32_t ipaddr) {
+    tag_clnd_ip & operator = (uint32_t ipaddr) {
         char _ip_[16] = {0};
         sprintf( _ip_, "%u.%u.%u.%u",
             (ipaddr >> (0 * 8)) & 0x00FF,
@@ -130,9 +130,9 @@ typedef struct tag_clrd_ip {
         ip = string(_ip_);
         return *this;
     }
-} clrd_ip;
+} clnd_ip;
 
-ostream & operator << (ostream &os, const clrd_ip & ip) {
+ostream & operator << (ostream &os, const clnd_ip & ip) {
     os << ip.ip;
     return os;
 }
@@ -141,8 +141,8 @@ ostream & operator << (ostream &os, const clrd_ip & ip) {
 Peer Info, contains an IP address and a port number.
 should be output in the following format: 0.0.0.0:0
 */
-typedef struct tag_clrd_peerinfo {
-    clrd_ip         ip;
+typedef struct tag_clnd_peerinfo {
+    clnd_ip         ip;
     uint16_t        port;
 
     void parse_peerinfo_string(const string &format_string) {
@@ -153,48 +153,48 @@ typedef struct tag_clrd_peerinfo {
         stoi(_components[1], nullptr, 10);
     }
 
-    tag_clrd_peerinfo() {}
-    tag_clrd_peerinfo(const string &format_string) : port(0) {
+    tag_clnd_peerinfo() {}
+    tag_clnd_peerinfo(const string &format_string) : port(0) {
         parse_peerinfo_string(format_string);
     }
-    tag_clrd_peerinfo(const string &ipaddr, uint16_t p) : ip(ipaddr), port(p) { }
-    tag_clrd_peerinfo(const tag_clrd_peerinfo& rhs):ip(rhs.ip), port(rhs.port) { }
-    tag_clrd_peerinfo & operator = (const tag_clrd_peerinfo& rhs) {
+    tag_clnd_peerinfo(const string &ipaddr, uint16_t p) : ip(ipaddr), port(p) { }
+    tag_clnd_peerinfo(const tag_clnd_peerinfo& rhs):ip(rhs.ip), port(rhs.port) { }
+    tag_clnd_peerinfo & operator = (const tag_clnd_peerinfo& rhs) {
         ip = rhs.ip;
         port = rhs.port;
         return *this;
     }
 
     operator bool() const { return port > 0 && port <= 65535; }
-} clrd_peerinfo;
+} clnd_peerinfo;
 
-ostream & operator << (ostream &os, const clrd_peerinfo &peer) {
+ostream & operator << (ostream &os, const clnd_peerinfo &peer) {
     os << peer.ip << ":" << peer.port;
     return os;
 }
 
 typedef enum {
-    clrd_protocol_inhiert   = 0,
-    clrd_protocol_tcp       = 0x01,
-    clrd_protocol_udp       = 0x02,
-    clrd_protocol_all       = clrd_protocol_tcp | clrd_protocol_udp,
-} clrd_protocol_t;
+    clnd_protocol_inhiert   = 0,
+    clnd_protocol_tcp       = 0x01,
+    clnd_protocol_udp       = 0x02,
+    clnd_protocol_all       = clnd_protocol_tcp | clnd_protocol_udp,
+} clnd_protocol_t;
 
-clrd_protocol_t clrd_protocol_from_string(const string &protocol_string) {
+clnd_protocol_t clnd_protocol_from_string(const string &protocol_string) {
     string _upcase = protocol_string;
     std::transform(_upcase.begin(), _upcase.end(), _upcase.begin(), ::toupper);
-    if ( _upcase == "INHIERT" ) return clrd_protocol_inhiert;
-    if ( _upcase == "TCP" ) return clrd_protocol_tcp;
-    if ( _upcase == "UDP" ) return clrd_protocol_udp;
-    if ( _upcase == "ALL" ) return clrd_protocol_all;
-    return clrd_protocol_inhiert;
+    if ( _upcase == "INHIERT" ) return clnd_protocol_inhiert;
+    if ( _upcase == "TCP" ) return clnd_protocol_tcp;
+    if ( _upcase == "UDP" ) return clnd_protocol_udp;
+    if ( _upcase == "ALL" ) return clnd_protocol_all;
+    return clnd_protocol_inhiert;
 }
-string clrd_protocol_string(clrd_protocol_t protocol) {
+string clnd_protocol_string(clnd_protocol_t protocol) {
     switch (protocol) {
-        case clrd_protocol_inhiert: return "inhiert";
-        case clrd_protocol_tcp: return "tcp";
-        case clrd_protocol_udp: return "udp";
-        case clrd_protocol_all: return "all";
+        case clnd_protocol_inhiert: return "inhiert";
+        case clnd_protocol_tcp: return "tcp";
+        case clnd_protocol_udp: return "udp";
+        case clnd_protocol_all: return "all";
     };
 }
 
@@ -212,11 +212,12 @@ static const Json::Value& check_key_and_get_value(const Json::Value& node, const
 static const Json::Value& check_key_mustbe_array(
     const Json::Value& node, 
     const string &key ) {
-    Json::Value _v = node[key];
-    bool _is_type = _v.isArray();
+    bool _is_type = node[key].isArray();
     if ( !_is_type ) {
         ostringstream _oss;
-        _oss << "checking type for key: \"" << key << "\" failed." << endl;
+        _oss << "checking array for key: \"" << key << "\" failed." << endl;
+        Json::FastWriter _jsonWriter;
+        _oss << "node is: " << _jsonWriter.write(node) << endl;
         throw( runtime_error(_oss.str()) );
     }
     return node[key];
@@ -240,79 +241,79 @@ static void check_json_value_mustby_object(const Json::Value &node) {
 }
 
 typedef enum {
-    clrd_filter_mode_unknow,
-    clrd_filter_mode_local,
-    clrd_filter_mode_redirect
-} clrd_filter_mode;
+    clnd_filter_mode_unknow,
+    clnd_filter_mode_local,
+    clnd_filter_mode_redirect
+} clnd_filter_mode;
 
-static clrd_filter_mode clrd_filter_mode_from_string(const string & mode_string) {
+static clnd_filter_mode clnd_filter_mode_from_string(const string & mode_string) {
     string _upcase = mode_string;
     std::transform(_upcase.begin(), _upcase.end(), _upcase.begin(), ::toupper);
-    if ( _upcase == "LOCAL" ) return clrd_filter_mode_local;
-    if ( _upcase == "REDIRECT" ) return clrd_filter_mode_redirect;
-    return clrd_filter_mode_unknow;
+    if ( _upcase == "LOCAL" ) return clnd_filter_mode_local;
+    if ( _upcase == "REDIRECT" ) return clnd_filter_mode_redirect;
+    return clnd_filter_mode_unknow;
 }
 
-static string clrd_filter_mode_string(clrd_filter_mode mode) {
+static string clnd_filter_mode_string(clnd_filter_mode mode) {
     switch (mode) {
-        case clrd_filter_mode_unknow: return "unknow";
-        case clrd_filter_mode_local: return "local";
-        case clrd_filter_mode_redirect: return "redirect";
+        case clnd_filter_mode_unknow: return "unknow";
+        case clnd_filter_mode_local: return "local";
+        case clnd_filter_mode_redirect: return "redirect";
     };
 }
 
-class clrd_filter_local;
-class clrd_filter_redirect;
+class clnd_filter_local;
+class clnd_filter_redirect;
 
-class clrd_filter {
+class clnd_filter {
 protected:
     string                  name_;
-    clrd_protocol_t         protocol_;
-    clrd_peerinfo           parent_;
-    clrd_peerinfo           socks5_;
+    clnd_protocol_t         protocol_;
+    clnd_peerinfo           parent_;
+    clnd_peerinfo           socks5_;
     string                  after_;
-    clrd_filter_mode        mode_;
+    clnd_filter_mode        mode_;
 public: 
     const string &                  name;
-    const clrd_protocol_t &         protocol;
-    const clrd_peerinfo &           parent;
-    const clrd_peerinfo &           socks5;
+    const clnd_protocol_t &         protocol;
+    const clnd_peerinfo &           parent;
+    const clnd_peerinfo &           socks5;
     const string &                  after;
-    const clrd_filter_mode &        mode;
+    const clnd_filter_mode &        mode;
 
-    clrd_filter() : mode_(clrd_filter_mode_unknow), 
+    clnd_filter() : mode_(clnd_filter_mode_unknow), 
     name(name_), protocol(protocol_), parent(parent_), socks5(socks5_), after(after_), mode(mode_) { 
     }
 
-    clrd_filter( const Json::Value &config_node, clrd_filter_mode md ) : mode_(md),
+    clnd_filter( const Json::Value &config_node, clnd_filter_mode md ) : mode_(md),
         name(name_), protocol(protocol_), parent(parent_), socks5(socks5_), after(after_), mode(mode_) {
         name_ = check_key_with_default(config_node, "name", untitled_name()).asString();
-        protocol_ = clrd_protocol_from_string(
+        protocol_ = clnd_protocol_from_string(
             check_key_with_default(config_node, "protocol", "inhiert").asString()
             );
-        if ( mode_ == clrd_filter_mode_local ) {
+        if ( mode_ == clnd_filter_mode_local ) {
             parent_.ip = check_key_with_default(config_node, "server", "0.0.0.0").asString();
         } else {
             parent_.ip = check_key_and_get_value(config_node, "server").asString();
         }
         parent_.port = check_key_with_default(config_node, "port", 53).asUInt();
-        socks5_ = clrd_peerinfo(
+        socks5_ = clnd_peerinfo(
             check_key_with_default(config_node, "socks5", "0.0.0.0:0").asString()
             );
         after_ = check_key_with_default(config_node, "after", "").asString();
     }
 
-    operator bool() const { return mode_ != clrd_filter_mode_unknow; }
+    operator bool() const { return mode_ != clnd_filter_mode_unknow; }
 
     virtual void output_detail_info(ostream &os) const { }
-
+    virtual bool is_match_filter(const string &query_domain) const = 0;
     bool go_through_proxy() const { return socks5_; }
 };
 
-ostream & operator << (ostream &os, const clrd_filter* filter) {
+ostream & operator << (ostream &os, const clnd_filter* filter) {
     os  << "Filter: \033[1;32m" << filter->name << "\033[0m, mode: " 
-        << "\033[1;32m" << clrd_filter_mode_string(filter->mode) << "\033[0m" << endl;
-    os << "\tusing protocol: \033[1;31m" << clrd_protocol_string(filter->protocol) << "\033[0m" << endl;
+        << "\033[1;32m" << clnd_filter_mode_string(filter->mode) << "\033[0m" << endl;
+    os << "\tusing protocol: \033[1;31m" << clnd_protocol_string(filter->protocol) << "\033[0m" << endl;
     os << "\tparent info: \033[1m" << filter->parent << "\033[0m" << endl;
     os << "\tsocks5 info: \033[1m" << filter->socks5 << "\033[0m" << endl;
     os << "\tafter: \033[1m" << filter->after << "\033[0m" << endl;
@@ -320,15 +321,15 @@ ostream & operator << (ostream &os, const clrd_filter* filter) {
     return os;
 }
 
-class clrd_filter_local : public clrd_filter {
+class clnd_filter_local : public clnd_filter {
     string                              domain_;
-    map<string, vector<clrd_ip> >       A_records_;
+    map<string, vector<clnd_ip> >       A_records_;
     map<string, string>                 CName_records_;
 public:
     const string&                       domain;
 
-    clrd_filter_local(const Json::Value &config_node, clrd_filter_mode md) : 
-        clrd_filter(config_node, md), domain(domain_) {
+    clnd_filter_local(const Json::Value &config_node, clnd_filter_mode md) : 
+        clnd_filter(config_node, md), domain(domain_) {
         domain_ = check_key_and_get_value(config_node, "domain").asString();
         if ( config_node.isMember("A") ) {
             Json::Value _A_nodes = check_key_mustbe_array(config_node, "A");
@@ -337,9 +338,9 @@ public:
                 check_json_value_mustby_object(_A_rec);
                 string _sub = check_key_and_get_value(_A_rec, "sub").asString();
                 Json::Value _ip_obj = check_key_and_get_value(_A_rec, "ip");
-                vector<clrd_ip> _recs;
+                vector<clnd_ip> _recs;
                 if ( _ip_obj.isString() ) {
-                    clrd_ip _ip(_ip_obj.asString());
+                    clnd_ip _ip(_ip_obj.asString());
                     _recs.emplace_back(_ip);
                     A_records_[_sub] = _recs;
                 } else if ( _ip_obj.isArray() ) {
@@ -382,28 +383,51 @@ public:
             }
         }
     }
-};
-
-class clrd_filter_redirect : public clrd_filter {
-public:
-    clrd_filter_redirect(const Json::Value &config_node, clrd_filter_mode md) : clrd_filter(config_node, md) {
-
+    virtual bool is_match_filter(const string &query_domain) const {
+        
+        return false;
     }
 };
 
-typedef shared_ptr<clrd_filter> lp_clrd_filter;
-static lp_clrd_filter create_filter_from_config(const Json::Value &config_node) {
+class clnd_filter_redirect : public clnd_filter {
+    map< string, bool >             rules_;
+public:
+    clnd_filter_redirect(const Json::Value &config_node, clnd_filter_mode md) : clnd_filter(config_node, md) {
+        if ( config_node.isMember("rulelist") == false ) return;
+        Json::Value _rl_node = check_key_mustbe_array(config_node, "rulelist");
+        for ( Json::ArrayIndex i = 0; i < _rl_node.size(); ++i ) {
+            string _rule_str = _rl_node[i].asString();
+            if ( _rule_str[0] == '!' ) {
+                string _r = _rule_str.substr(1);
+                rules_[trim(_r)] = false;
+            } else {
+                rules_[trim(_rule_str)] = true;
+            }
+        }
+    }
+
+    virtual void output_detail_info(ostream &os) const {
+        os << "Rulelist count: \033[1;33m" << rules_.size() << "\033[0m" << endl;
+    }
+
+    virtual bool is_match_filter(const string &query_domain) const {
+        return false;
+    }
+};
+
+typedef shared_ptr<clnd_filter> lp_clnd_filter;
+static lp_clnd_filter create_filter_from_config(const Json::Value &config_node) {
     string _mode = check_key_and_get_value(config_node, "mode").asString();
-    clrd_filter_mode _md = clrd_filter_mode_from_string(_mode);
-    if ( _md == clrd_filter_mode_unknow ) return lp_clrd_filter(nullptr);
-    if ( _md == clrd_filter_mode_local ) return lp_clrd_filter(new clrd_filter_local(config_node, _md));
-    if ( _md == clrd_filter_mode_redirect ) return lp_clrd_filter(new clrd_filter_redirect(config_node, _md));
-    return lp_clrd_filter(nullptr);
+    clnd_filter_mode _md = clnd_filter_mode_from_string(_mode);
+    if ( _md == clnd_filter_mode_unknow ) return lp_clnd_filter(nullptr);
+    if ( _md == clnd_filter_mode_local ) return lp_clnd_filter(new clnd_filter_local(config_node, _md));
+    if ( _md == clnd_filter_mode_redirect ) return lp_clnd_filter(new clnd_filter_redirect(config_node, _md));
+    return lp_clnd_filter(nullptr);
 }
 
-class clrd_config_service {
+class clnd_config_service {
 protected:
-    clrd_protocol_t         service_protocol_;
+    clnd_protocol_t         service_protocol_;
     uint16_t                port_;
     string                  logpath_;
     cp_log_level            loglv_;
@@ -436,23 +460,23 @@ protected:
 public:
 
     // const reference
-    const clrd_protocol_t & service_protocol;
+    const clnd_protocol_t & service_protocol;
     const uint16_t &        port;
     const string &          logpath;
     const cp_log_level &    loglv;
     const bool &            daemon;
     const string &          pidfile;
 
-    clrd_config_service( ) :
+    clnd_config_service( ) :
         service_protocol(service_protocol_),
         port(port_),
         logpath(logpath_),
         loglv(loglv_),
         daemon(daemon_),
         pidfile(pidfile_){ /* nothing */ }
-    virtual ~clrd_config_service() { /* nothing */ }
+    virtual ~clnd_config_service() { /* nothing */ }
 
-    clrd_config_service( const Json::Value& config_node ) :
+    clnd_config_service( const Json::Value& config_node ) :
         service_protocol(service_protocol_),
         port(port_),
         logpath(logpath_),
@@ -461,7 +485,7 @@ public:
         pidfile(pidfile_) 
     {
         // Service
-        service_protocol_ = clrd_protocol_from_string(
+        service_protocol_ = clnd_protocol_from_string(
             check_key_with_default(config_node, "protocol", "all").asString());
         port_ = check_key_with_default(config_node, "port", 53).asUInt();
         logpath_ = check_key_with_default(config_node, "logpath", "syslog").asString();
@@ -528,15 +552,15 @@ void cleandns_version_info() {
     printf( "Visit <https://github.com/littlepush/cleandns> for more infomation.\n" );
 }
 
-clrd_config_service *_g_service_config = NULL;
-vector< lp_clrd_filter > _g_filter_array;
-lp_clrd_filter _g_default_filter;
+clnd_config_service *_g_service_config = NULL;
+vector< lp_clnd_filter > _g_filter_array;
+lp_clnd_filter _g_default_filter;
 
-void clrd_global_sort_filter() {
-    vector< lp_clrd_filter > _local_filters;
-    map< string, lp_clrd_filter > _redirect_filters;
+void clnd_global_sort_filter() {
+    vector< lp_clnd_filter > _local_filters;
+    map< string, lp_clnd_filter > _redirect_filters;
     for ( auto _f : _g_filter_array ) {
-        if ( _f->mode == clrd_filter_mode_redirect ) {
+        if ( _f->mode == clnd_filter_mode_redirect ) {
             _redirect_filters[_f->name] = _f;
         }
         else _local_filters.push_back(_f);
@@ -545,7 +569,7 @@ void clrd_global_sort_filter() {
     _g_filter_array.insert(begin(_g_filter_array), begin(_local_filters), end(_local_filters));
 
     while ( _redirect_filters.size() > 0 ) {
-        list<lp_clrd_filter > _temp_array;
+        list<lp_clnd_filter > _temp_array;
         auto _begin = begin(_redirect_filters);
         auto _last = _begin;
         for ( ; _begin != end(_redirect_filters); ++_begin ) {
@@ -553,7 +577,7 @@ void clrd_global_sort_filter() {
                 _last = _begin;
             }
         }
-        lp_clrd_filter _f = _last->second;
+        lp_clnd_filter _f = _last->second;
         do {
             _temp_array.push_front(_f);
             _redirect_filters.erase(_f->name);
@@ -607,7 +631,7 @@ int main( int argc, char *argv[] ) {
                     }
                     for ( Json::ArrayIndex i = 0; i < _filter_nodes.size(); ++i ) {
                         //_filter_config_array(_filter_nodes[i]);
-                        lp_clrd_filter _f = create_filter_from_config(_filter_nodes[i]);
+                        lp_clnd_filter _f = create_filter_from_config(_filter_nodes[i]);
                         if ( !_f || !(*_f) ) {
                             cout << "failed to load the filter " << i << endl;
                             return 3;
@@ -667,7 +691,7 @@ int main( int argc, char *argv[] ) {
                     cout << _filter_reader.getFormattedErrorMessages() << endl;
                     return 1;
                 }
-                lp_clrd_filter _f = create_filter_from_config(_config_filter);
+                lp_clnd_filter _f = create_filter_from_config(_config_filter);
                 if ( !_f || !(*_f) ) {
                     cout << "failed to load the filter config file: " << _filter_path << endl;
                     return 3;
@@ -697,7 +721,7 @@ int main( int argc, char *argv[] ) {
     cout << _g_default_filter;
 #endif
     // Start service
-    _g_service_config = new clrd_config_service(_config_service);
+    _g_service_config = new clnd_config_service(_config_service);
 
 
     if ( _g_service_config->daemon ) {
@@ -732,7 +756,7 @@ int main( int argc, char *argv[] ) {
     _g_service_config->start_log();
 
     // Sort the filter
-    clrd_global_sort_filter();
+    clnd_global_sort_filter();
 
 #if DEBUG
     for ( auto f : _g_filter_array ) {
