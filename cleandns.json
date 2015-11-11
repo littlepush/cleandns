@@ -3,7 +3,8 @@
         "daemon" : false,
         "port" : 1053,
         "loglv" : "debug",
-        "logpath" : "stderr"
+        "logpath" : "stderr",
+        "pidfile" : "~/cleandns.pid"
     }, 
     "default" : {
         "server" : "119.29.29.29"
@@ -24,9 +25,20 @@
             "mode" : "local",
             "domain" : "meetutech.com",
             "A" : [
-                {"office" : "10.15.11.1"},
-                {"exsi": "10.15.11.2"},
-                {"pdev": "10.15.11.39"}
+                {
+                    "sub" : "office",
+                    "ip": ["10.15.11.1", "116.236.186.118"]
+                },
+                {
+                    "sub": "exsi",
+                    "ip": "10.15.11.2"
+                }
+            ],
+            "CName": [
+                {
+                    "sub" : "push",
+                    "record" : "pushchen.com"
+                }
             ]
         }
     ]

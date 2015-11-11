@@ -26,10 +26,13 @@ domain      string object
     the main domain name, like `google.com`
 A           object array
     A-Record is an object, in the following format:
-    "sub-domain" : "ip address"
+    "sub" : "sub domain string",
+    "ip" : "ip address"
     or
-    "sub-domain" : ["ip address 1", "ip address 2", ...]
+    "sub" : "sub domain string",
+    "ip" : ["ip address1", "ip address2", ...]
 CName       object array
     CName record is an object, in the following format:
-    "sub-domain" : "full other domain"
+    "sub" : "sub domain string",
+    "record" : "other domain name"
 if a sub-domain is not in the local configuration file, will be redirected to the default server in this filter. if not set any default server in this filter, then will try the global default server.

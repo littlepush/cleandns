@@ -132,6 +132,11 @@ typedef struct tag_clrd_ip {
     }
 } clrd_ip;
 
+ostream & operator << (ostream &os, const clrd_ip & ip) {
+    os << ip.ip;
+    return os;
+}
+
 /*!
 Peer Info, contains an IP address and a port number.
 should be output in the following format: 0.0.0.0:0
@@ -184,6 +189,14 @@ clrd_protocol_t clrd_protocol_from_string(const string &protocol_string) {
     if ( _upcase == "ALL" ) return clrd_protocol_all;
     return clrd_protocol_inhiert;
 }
+string clrd_protocol_string(clrd_protocol_t protocol) {
+    switch (protocol) {
+        case clrd_protocol_inhiert: return "inhiert";
+        case clrd_protocol_tcp: return "tcp";
+        case clrd_protocol_udp: return "udp";
+        case clrd_protocol_all: return "all";
+    };
+}
 
 static const Json::Value& check_key_and_get_value(const Json::Value& node, const string &key) {
     if ( node.isMember(key) == false ) {
@@ -196,9 +209,34 @@ static const Json::Value& check_key_and_get_value(const Json::Value& node, const
     return node[key];
 }
 
-static const Json::Value& check_key_with_default(const Json::Value& node, const string &key, const Json::Value &defaultValue) {
+static const Json::Value& check_key_mustbe_array(
+    const Json::Value& node, 
+    const string &key ) {
+    Json::Value _v = node[key];
+    bool _is_type = _v.isArray();
+    if ( !_is_type ) {
+        ostringstream _oss;
+        _oss << "checking type for key: \"" << key << "\" failed." << endl;
+        throw( runtime_error(_oss.str()) );
+    }
+    return node[key];
+}
+
+static const Json::Value& check_key_with_default(
+    const Json::Value& node, 
+    const string &key, 
+    const Json::Value &defaultValue) {
     if ( node.isMember(key) == false ) return defaultValue;
     return node[key];
+}
+
+static void check_json_value_mustby_object(const Json::Value &node) {
+    if ( node.isObject() ) return;
+    ostringstream _oss;
+    Json::FastWriter _jsonWriter;
+    _oss << "checking object for node: " << endl << "\t" <<
+        _jsonWriter.write(node) << endl << "\033[1;31mFailed\033[0m" << endl;
+    throw( runtime_error(_oss.str()) );
 }
 
 typedef enum {
@@ -213,6 +251,14 @@ static clrd_filter_mode clrd_filter_mode_from_string(const string & mode_string)
     if ( _upcase == "LOCAL" ) return clrd_filter_mode_local;
     if ( _upcase == "REDIRECT" ) return clrd_filter_mode_redirect;
     return clrd_filter_mode_unknow;
+}
+
+static string clrd_filter_mode_string(clrd_filter_mode mode) {
+    switch (mode) {
+        case clrd_filter_mode_unknow: return "unknow";
+        case clrd_filter_mode_local: return "local";
+        case clrd_filter_mode_redirect: return "redirect";
+    };
 }
 
 class clrd_filter_local;
@@ -244,7 +290,11 @@ public:
         protocol_ = clrd_protocol_from_string(
             check_key_with_default(config_node, "protocol", "inhiert").asString()
             );
-        parent_.ip = check_key_and_get_value(config_node, "server").asString();
+        if ( mode_ == clrd_filter_mode_local ) {
+            parent_.ip = check_key_with_default(config_node, "server", "0.0.0.0").asString();
+        } else {
+            parent_.ip = check_key_and_get_value(config_node, "server").asString();
+        }
         parent_.port = check_key_with_default(config_node, "port", 53).asUInt();
         socks5_ = clrd_peerinfo(
             check_key_with_default(config_node, "socks5", "0.0.0.0:0").asString()
@@ -254,13 +304,83 @@ public:
 
     operator bool() const { return mode_ != clrd_filter_mode_unknow; }
 
+    virtual void output_detail_info(ostream &os) const { }
+
     bool go_through_proxy() const { return socks5_; }
 };
 
-class clrd_filter_local : public clrd_filter {
-public:
-    clrd_filter_local(const Json::Value &config_node, clrd_filter_mode md) : clrd_filter(config_node, md) {
+ostream & operator << (ostream &os, const clrd_filter* filter) {
+    os  << "Filter: \033[1;32m" << filter->name << "\033[0m, mode: " 
+        << "\033[1;32m" << clrd_filter_mode_string(filter->mode) << "\033[0m" << endl;
+    os << "\tusing protocol: \033[1;31m" << clrd_protocol_string(filter->protocol) << "\033[0m" << endl;
+    os << "\tparent info: \033[1m" << filter->parent << "\033[0m" << endl;
+    os << "\tsocks5 info: \033[1m" << filter->socks5 << "\033[0m" << endl;
+    os << "\tafter: \033[1m" << filter->after << "\033[0m" << endl;
+    filter->output_detail_info(os);
+    return os;
+}
 
+class clrd_filter_local : public clrd_filter {
+    string                              domain_;
+    map<string, vector<clrd_ip> >       A_records_;
+    map<string, string>                 CName_records_;
+public:
+    const string&                       domain;
+
+    clrd_filter_local(const Json::Value &config_node, clrd_filter_mode md) : 
+        clrd_filter(config_node, md), domain(domain_) {
+        domain_ = check_key_and_get_value(config_node, "domain").asString();
+        if ( config_node.isMember("A") ) {
+            Json::Value _A_nodes = check_key_mustbe_array(config_node, "A");
+            for ( Json::ArrayIndex i = 0; i < _A_nodes.size(); ++i ) {
+                Json::Value _A_rec = _A_nodes[i];
+                check_json_value_mustby_object(_A_rec);
+                string _sub = check_key_and_get_value(_A_rec, "sub").asString();
+                Json::Value _ip_obj = check_key_and_get_value(_A_rec, "ip");
+                vector<clrd_ip> _recs;
+                if ( _ip_obj.isString() ) {
+                    clrd_ip _ip(_ip_obj.asString());
+                    _recs.emplace_back(_ip);
+                    A_records_[_sub] = _recs;
+                } else if ( _ip_obj.isArray() ) {
+                    for ( Json::ArrayIndex idx = 0; idx < _ip_obj.size(); ++idx ) {
+                        _recs.emplace_back(_ip_obj[idx].asString());
+                    }
+                    A_records_[_sub] = _recs;
+                }
+            }
+        }
+        if ( config_node.isMember("CName") ) {
+            Json::Value _C_nodes = check_key_mustbe_array(config_node, "CName");
+            for ( Json::ArrayIndex i = 0; i < _C_nodes.size(); ++i ) {
+                Json::Value _C_rec = _C_nodes[i];
+                check_json_value_mustby_object(_C_rec);
+                string _sub = check_key_and_get_value(_C_rec, "sub").asString();
+                string _other_domain = check_key_and_get_value(_C_rec, "record").asString();
+                CName_records_[_sub] = _other_domain;
+            }
+        }
+    }
+    virtual void output_detail_info(ostream &os) const {
+        if ( A_records_.size() ) {
+            os << "A records: \033[1;33m" << A_records_.size() << "\033[0m" << endl;
+            for ( auto _A_it = begin(A_records_); _A_it != end(A_records_); ++_A_it ) {
+                os << "\t\033[1;34m" << _A_it->first << "\033[0m: [";
+                for ( auto _ip : _A_it->second ) {
+                    os << _ip << ", ";
+                }
+                os << "\b\b";
+                os << "]" << endl;
+            }
+        }
+
+        if ( CName_records_.size() ) {
+            os << "CName records: \033[1;33m" << CName_records_.size() << "\033[0m" << endl;
+            for ( auto _C_it = begin(CName_records_); _C_it != end(CName_records_); ++_C_it ) {
+                os << "\t\033[1;34m" << _C_it->first << "." << domain << "\033[m: " << 
+                    _C_it->second << endl;
+            }
+        }
     }
 };
 
@@ -572,7 +692,10 @@ int main( int argc, char *argv[] ) {
         cout << "Invalidate default filter config" << endl;
         return 3;
     }
-
+    // Dump the filter
+#if DEBUG
+    cout << _g_default_filter;
+#endif
     // Start service
     _g_service_config = new clrd_config_service(_config_service);
 
@@ -610,6 +733,12 @@ int main( int argc, char *argv[] ) {
 
     // Sort the filter
     clrd_global_sort_filter();
+
+#if DEBUG
+    for ( auto f : _g_filter_array ) {
+        cout << f;
+    }
+#endif
 
     // Hang current process
     set_signal_handler();
