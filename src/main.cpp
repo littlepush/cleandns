@@ -75,16 +75,26 @@ using namespace cpputility;
 #include "doc_header_auto_generate.h"
 #endif
 
+static string untitled_name() {
+    static int _id = 1;
+    ostringstream _oss;
+    _oss << "untitled_" << _id++;
+    return _oss.str();
+}
+
+/*!
+The IP object, compatible with std::string and uint32_t
+This is a ipv4 ip address class.
+*/
 typedef struct tag_clrd_ip {
     string          ip;
 
     tag_clrd_ip() {}
     tag_clrd_ip(const string &ipaddr) : ip(ipaddr) {}
     tag_clrd_ip(const tag_clrd_ip& rhs) : ip(rhs.ip) {}
-    tag_clrd_ip & operator = (const string &ipaddr) {
-        ip = ipaddr; return *this;
+    tag_clrd_ip(uint32_t ipaddr) {
+        this->operator =(ipaddr);
     }
-
     operator uint32_t() const {
         vector<string> _components;
         string _clean_ipstring(this->ip);
@@ -101,8 +111,30 @@ typedef struct tag_clrd_ip {
         }
         return _ipaddr;
     }
+    operator string&() { return ip; }
+
+    // Cast operator
+    tag_clrd_ip & operator = (const string &ipaddr) {
+        ip = ipaddr; return *this;
+    }
+
+    tag_clrd_ip & operator = (uint32_t ipaddr) {
+        char _ip_[16] = {0};
+        sprintf( _ip_, "%u.%u.%u.%u",
+            (ipaddr >> (0 * 8)) & 0x00FF,
+            (ipaddr >> (1 * 8)) & 0x00FF,
+            (ipaddr >> (2 * 8)) & 0x00FF,
+            (ipaddr >> (3 * 8)) & 0x00FF 
+        );
+        ip = string(_ip_);
+        return *this;
+    }
 } clrd_ip;
 
+/*!
+Peer Info, contains an IP address and a port number.
+should be output in the following format: 0.0.0.0:0
+*/
 typedef struct tag_clrd_peerinfo {
     clrd_ip         ip;
     uint16_t        port;
@@ -129,6 +161,11 @@ typedef struct tag_clrd_peerinfo {
 
     operator bool() const { return port > 0 && port <= 65535; }
 } clrd_peerinfo;
+
+ostream & operator << (ostream &os, const clrd_peerinfo &peer) {
+    os << peer.ip << ":" << peer.port;
+    return os;
+}
 
 typedef enum {
     clrd_protocol_inhiert   = 0,
@@ -163,40 +200,85 @@ static const Json::Value& check_key_with_default(const Json::Value& node, const 
     return node[key];
 }
 
+typedef enum {
+    clrd_filter_mode_unknow,
+    clrd_filter_mode_local,
+    clrd_filter_mode_redirect
+} clrd_filter_mode;
+
+static clrd_filter_mode clrd_filter_mode_from_string(const string & mode_string) {
+    string _upcase = mode_string;
+    std::transform(_upcase.begin(), _upcase.end(), _upcase.begin(), ::toupper);
+    if ( _upcase == "LOCAL" ) return clrd_filter_mode_local;
+    if ( _upcase == "REDIRECT" ) return clrd_filter_mode_redirect;
+    return clrd_filter_mode_unknow;
+}
+
+class clrd_filter_local;
+class clrd_filter_redirect;
+
 class clrd_filter {
 protected:
+    string                  name_;
     clrd_protocol_t         protocol_;
     clrd_peerinfo           parent_;
     clrd_peerinfo           socks5_;
+    string                  after_;
+    clrd_filter_mode        mode_;
 public: 
-
+    const string &                  name;
     const clrd_protocol_t &         protocol;
     const clrd_peerinfo &           parent;
     const clrd_peerinfo &           socks5;
+    const string &                  after;
+    const clrd_filter_mode &        mode;
 
-    clrd_filter() : protocol(protocol_), parent(parent_), socks5(socks5_) { 
-        // // Default
-        // parent_.ip = check_key_and_get_value(config_node, "parent").asString();
-        // parent_.port = check_key_with_default(config_node, "parent-port", Json::Value(53)).asUInt();
-        // protocol_ = clrd_protocol_from_string(
-        //     check_key_with_default(config_node, "redirect-protocol", Json::Value("inhiert")).asString());
-        // socks5_ = clrd_peerinfo(
-        //     check_key_with_default(config_node, "socks5", Json::Value("0.0.0.0:0")).asString()
-        //     );
+    clrd_filter() : mode_(clrd_filter_mode_unknow), 
+    name(name_), protocol(protocol_), parent(parent_), socks5(socks5_), after(after_), mode(mode_) { 
     }
-    virtual ~clrd_filter() = 0;
 
-    operator bool() const { return parent_; }
+    clrd_filter( const Json::Value &config_node, clrd_filter_mode md ) : mode_(md),
+        name(name_), protocol(protocol_), parent(parent_), socks5(socks5_), after(after_), mode(mode_) {
+        name_ = check_key_with_default(config_node, "name", untitled_name()).asString();
+        protocol_ = clrd_protocol_from_string(
+            check_key_with_default(config_node, "protocol", "inhiert").asString()
+            );
+        parent_.ip = check_key_and_get_value(config_node, "server").asString();
+        parent_.port = check_key_with_default(config_node, "port", 53).asUInt();
+        socks5_ = clrd_peerinfo(
+            check_key_with_default(config_node, "socks5", "0.0.0.0:0").asString()
+            );
+        after_ = check_key_with_default(config_node, "after", "").asString();
+    }
+
+    operator bool() const { return mode_ != clrd_filter_mode_unknow; }
+
     bool go_through_proxy() const { return socks5_; }
 };
 
-class clrd_filter_local : clrd_filter {
+class clrd_filter_local : public clrd_filter {
+public:
+    clrd_filter_local(const Json::Value &config_node, clrd_filter_mode md) : clrd_filter(config_node, md) {
 
+    }
 };
 
-class clrd_filter_redirect : clrd_filter {
+class clrd_filter_redirect : public clrd_filter {
+public:
+    clrd_filter_redirect(const Json::Value &config_node, clrd_filter_mode md) : clrd_filter(config_node, md) {
 
+    }
 };
+
+typedef shared_ptr<clrd_filter> lp_clrd_filter;
+static lp_clrd_filter create_filter_from_config(const Json::Value &config_node) {
+    string _mode = check_key_and_get_value(config_node, "mode").asString();
+    clrd_filter_mode _md = clrd_filter_mode_from_string(_mode);
+    if ( _md == clrd_filter_mode_unknow ) return lp_clrd_filter(nullptr);
+    if ( _md == clrd_filter_mode_local ) return lp_clrd_filter(new clrd_filter_local(config_node, _md));
+    if ( _md == clrd_filter_mode_redirect ) return lp_clrd_filter(new clrd_filter_redirect(config_node, _md));
+    return lp_clrd_filter(nullptr);
+}
 
 class clrd_config_service {
 protected:
@@ -326,10 +408,25 @@ void cleandns_version_info() {
 }
 
 clrd_config_service *_g_service_config = NULL;
+vector< lp_clrd_filter > _g_filter_array;
+lp_clrd_filter _g_default_filter;
+
+void clrd_global_sort_filter() {
+    vector< lp_clrd_filter > _local_filters;
+    map< string, lp_clrd_filter > _redirect_filters;
+    for ( auto _f : _g_filter_array ) {
+        if ( _f->mode == clrd_filter_mode_redirect ) {
+            _redirect_filters[_f->name] = _f;
+        }
+        else _local_filters.push_back(_f);
+    }
+
+}
 
 int main( int argc, char *argv[] ) {
     Json::Value _config_root;
     Json::Value _config_service;
+    Json::Value _config_default_filter;
     bool _reload_config = false;
 
     if ( argc >= 2 ) {
@@ -359,6 +456,24 @@ int main( int argc, char *argv[] ) {
                     return 1;
                 }
                 _config_service = check_key_and_get_value(_config_root, "service");
+                _config_default_filter = check_key_and_get_value(_config_root, "default");
+                if ( _config_root.isMember("filters") ) {
+                    Json::Value _filter_nodes = _config_root["filters"];
+                    if ( _filter_nodes.isArray() == false ) {
+                        cout << "Invalidate config for filters in config file" << endl;
+                        return 3;
+                    }
+                    for ( Json::ArrayIndex i = 0; i < _filter_nodes.size(); ++i ) {
+                        //_filter_config_array(_filter_nodes[i]);
+                        lp_clrd_filter _f = create_filter_from_config(_filter_nodes[i]);
+                        if ( !_f || !(*_f) ) {
+                            cout << "failed to load the filter " << i << endl;
+                            return 3;
+                        }
+                        _g_filter_array.push_back(_f);
+                    }
+                }
+
                 continue;
             }
             if ( _command == "-o" || _command == "--option" ) {
@@ -385,11 +500,54 @@ int main( int argc, char *argv[] ) {
                 }
                 continue;
             }
+            if ( _command == "-of" || _command == "--filter-option" ) {
+                string _option_string = argv[++_arg];
+                vector<string> _opt_com;
+                split_string(_option_string, "=", _opt_com);
+                if ( _opt_com.size() != 2 ) {
+                    cerr << "Invalidate option: " << _option_string << "." << endl;
+                    return 3;
+                }
+                if ( _opt_com[0] == "port" ) {
+                    _config_default_filter["port"] = stoi(_opt_com[1], nullptr, 10);
+                } else {
+                    _config_default_filter[_opt_com[0]] = _opt_com[1];
+                }
+                continue;
+            }
+            if ( _command == "-f" || _command == "--filter" ) {
+                // _filter_file_array.push_back(argv[++_arg]);
+                Json::Reader _filter_reader;
+                string _filter_path = argv[++_arg];
+                Json::Value _config_filter;
+                ifstream _filter_stream(_filter_path, std::ifstream::binary);
+                if ( !_filter_reader.parse(_filter_stream, _config_filter, false ) ) {
+                    cout << _filter_reader.getFormattedErrorMessages() << endl;
+                    return 1;
+                }
+                lp_clrd_filter _f = create_filter_from_config(_config_filter);
+                if ( !_f || !(*_f) ) {
+                    cout << "failed to load the filter config file: " << _filter_path << endl;
+                    return 3;
+                }
+                _g_filter_array.push_back(_f);
+                continue;
+            }
             cerr << "Invalidate argument: " << _command << "." << endl;
             return 1;
         }
     }
 
+    // Create the default filter
+    _config_default_filter["name"] = "default";
+    _config_default_filter["mode"] = "redirect";
+    _g_default_filter = create_filter_from_config(_config_default_filter);
+    if ( !_g_default_filter || !(*_g_default_filter) ) {
+        cout << "Invalidate default filter config" << endl;
+        return 3;
+    }
+
+    // Start service
     _g_service_config = new clrd_config_service(_config_service);
     if ( _g_service_config->daemon ) {
         pid_t _pid = fork();
@@ -421,6 +579,9 @@ int main( int argc, char *argv[] ) {
 
     // Start the log service at the beginning
     _g_service_config->start_log();
+
+    // Sort the filter
+    clrd_global_sort_filter();
 
     // Hang current process
     set_signal_handler();

@@ -2,7 +2,8 @@ cleandns -c [config_file]
     default config file is /etc/cleandns.json
 cleandns -[vh]
     print this message or version info
-cleandns -o [options]
+cleandns -o [options] -fo [filter-options] -f [filter file]
+    -o | --option server basic options
     The following is service options
     port=[port number]
         In default the port should be 53 in client mode and 1053 in server mode.
@@ -17,14 +18,16 @@ cleandns -o [options]
     pidfile=[/var/run/cleandns/pid]
         the pid file path, default is /var/run/cleandns/pid
 
+    -fo | --filter-option default filter option
     The following is default filter's options
-    parent=[ip address]
+    server=[ip address]
         Redirect any request to the parent server in default
-    parent-port=[server port]
+    port=[server port]
         In default the parent port should be 53, specified it if the parent use not the default port
-    redirect-protocol=[tcp/udp/inhiert]
+    protocol=[tcp/udp/inhiert]
         Redirect the request to parent use specified protocol, in default is `inhiert`
     socks5=[ipaddress:port]
         Use socks5 proxy and force `tcp` to redirect the query request.
-    filter=[file]
+    
+    -f | --filter [file]
         load a filter file, use cleandns --filter-help to see detail information. can set multiple filter files

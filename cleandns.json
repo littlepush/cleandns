@@ -3,6 +3,31 @@
         "daemon" : false,
         "port" : 1053,
         "loglv" : "debug",
-        "logpath" : "stdout"
-    }
+        "logpath" : "stderr"
+    }, 
+    "default" : {
+        "server" : "119.29.29.29"
+    },
+    "filters" : [
+        {
+            "name" : "gfwlist",
+            "mode" : "redirect",
+            "server" : "8.8.8.8",
+            "socks5" : "127.0.0.1:4098",
+            "rulelist" : [
+                "*google.com",
+                "*twitter.com"
+            ]
+        },
+        {
+            "name" : "meetu",
+            "mode" : "local",
+            "domain" : "meetutech.com",
+            "A" : [
+                {"office" : "10.15.11.1"},
+                {"exsi": "10.15.11.2"},
+                {"pdev": "10.15.11.39"}
+            ]
+        }
+    ]
 }
