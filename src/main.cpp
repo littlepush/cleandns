@@ -67,6 +67,8 @@ Roadmap
 #include "base64.h"
 #include "string_format.hpp"
 
+#include "dns.h"
+
 #include <list>
 #include <algorithm>
 
@@ -150,7 +152,7 @@ typedef struct tag_clnd_peerinfo {
         split_string(format_string, ":", _components);
         if ( _components.size() != 2 ) return;
         ip = _components[0];
-        stoi(_components[1], nullptr, 10);
+        port = stoi(_components[1], nullptr, 10);
     }
 
     tag_clnd_peerinfo() {}
@@ -301,6 +303,7 @@ public:
             check_key_with_default(config_node, "socks5", "0.0.0.0:0").asString()
             );
         after_ = check_key_with_default(config_node, "after", "").asString();
+        if ( this->go_through_proxy() ) protocol_ = clnd_protocol_tcp;
     }
 
     operator bool() const { return mode_ != clnd_filter_mode_unknow; }
@@ -384,7 +387,16 @@ public:
         }
     }
     virtual bool is_match_filter(const string &query_domain) const {
-        
+        if ( query_domain.size() < domain.size() ) return false;
+        size_t _qs = query_domain.size();
+        size_t _ds = domain.size();
+        for ( size_t i = 0; i < domain.size(); ++i ) {
+            if ( query_domain[_qs - i - 1] != domain[_ds - i - 1] ) return false;
+        }
+        if ( query_domain[_qs - _ds - 1] != '.' ) return false;
+        string _sub = query_domain.substr(0, _qs - _ds - 1);
+        if ( A_records_.find(_sub) != end(A_records_) ) return true;
+        if ( CName_records_.find(_sub) != end(CName_records_) ) return true;
         return false;
     }
 };
@@ -411,6 +423,20 @@ public:
     }
 
     virtual bool is_match_filter(const string &query_domain) const {
+        auto _rit = rules_.find(query_domain);
+        if ( _rit != end(rules_) ) {
+            return _rit->second;
+        }
+
+        vector<string> _coms;
+        split_string(query_domain, ".", _coms);
+        for ( size_t i = _coms.size(); i != 0; --i ) {
+            vector<string> _checked_coms;
+            for ( size_t si = i - 1; si < _coms.size(); ++si ) {
+                _checked_coms.push_back(_coms[si]);
+
+            }
+        }
         return false;
     }
 };
@@ -589,6 +615,69 @@ void clnd_global_sort_filter() {
     }
 }
 
+void clnd_network_manager( ) {
+    register_this_thread();
+
+    sl_tcpsocket _tcpso;
+    sl_udpsocket _udpso;
+
+    if ( _g_service_config->service_protocol & clnd_protocol_tcp ) {
+        bool _ret = false;
+        do {
+            _ret = _tcpso.listen(_g_service_config->port);
+            usleep( 500000 );
+        } while ( _ret == false && this_thread_is_running() );
+        if ( this_thread_is_running() == false ) return;
+        sl_poller::server().bind_tcp_server(_tcpso.m_socket);
+    }
+
+    if ( _g_service_config->service_protocol & clnd_protocol_udp ) {
+        bool _ret = false;
+        do {
+            _ret = _udpso.listen(_g_service_config->port);
+            usleep( 500000 );
+        } while ( _ret == false && this_thread_is_running() );
+        if ( this_thread_is_running() == false ) return;
+        sl_poller::server().bind_udp_server(_udpso.m_socket);
+    }
+
+    vector<sl_event> _event_list;
+    // Main run loop
+    while ( this_thread_is_running() ) {
+        _event_list.clear();
+        sl_poller::server().fetch_events(_event_list);
+        for ( auto &_event : _event_list ) {
+            if ( _event.event == SL_EVENT_FAILED ) {
+                
+            } else if ( _event.event == SL_EVENT_ACCEPT ) {
+                // New incoming
+                if ( _event.socktype == IPPROTO_TCP ) {
+                    sl_poller::server().monitor_socket( _event.so, true );
+                }
+            } else {
+                // New Data
+                if ( _event.socktype == IPPROTO_UDP ) {
+                    // UDP
+                    sl_udpsocket _uso(_event.so, _event.address);
+                    string _incoming_buf;
+                    _uso.recv(_incoming_buf);
+                    dump_hex(_incoming_buf);
+                    string _tc_buf;
+                    dns_generate_tc_package(_incoming_buf, _tc_buf);
+                    dump_hex(_tc_buf);
+                    _uso.write_data(_tc_buf);
+                } else {
+                    // TCP
+                    sl_tcpsocket _tso(_event.so);
+                    string _incoming_buf;
+                    _tso.recv(_incoming_buf);
+                    dump_hex(_incoming_buf);
+                }
+            }
+        }
+    }
+}
+
 int main( int argc, char *argv[] ) {
     Json::Value _config_root;
     Json::Value _config_service;
@@ -760,6 +849,25 @@ int main( int argc, char *argv[] ) {
 
 #if DEBUG
     for ( auto f : _g_filter_array ) {
+        cout << "check push.meetutech.com: " << 
+            (f->is_match_filter("push.meetutech.com") ? "\033[1;32mYES\033[0m" : "\033[1;31mNO\033[0m")
+            << endl;
+        cout << "check exsi.meetutech.com: " << 
+            (f->is_match_filter("exsi.meetutech.com") ? "\033[1;32mYES\033[0m" : "\033[1;31mNO\033[0m")
+            << endl;
+        cout << "check office.meetutech.net: " << 
+            (f->is_match_filter("office.meetutech.net") ? "\033[1;32mYES\033[0m" : "\033[1;31mNO\033[0m")
+            << endl;
+
+        cout << "check www.meetutech.com: " << 
+            (f->is_match_filter("www.meetutech.com") ? "\033[1;32mYES\033[0m" : "\033[1;31mNO\033[0m")
+            << endl;
+        cout << "check mail.meetutech.com: " << 
+            (f->is_match_filter("mail.meetutech.com") ? "\033[1;32mYES\033[0m" : "\033[1;31mNO\033[0m")
+            << endl;
+        cout << "check ftp.meetutech.com: " << 
+            (f->is_match_filter("ftp.meetutech.com") ? "\033[1;32mYES\033[0m" : "\033[1;31mNO\033[0m")
+            << endl;
         cout << f;
     }
 #endif
@@ -767,8 +875,33 @@ int main( int argc, char *argv[] ) {
     // Hang current process
     set_signal_handler();
 
+    for ( ; ; ) {
+        sl_udpsocket _test_udp_so;
+        if ( !_test_udp_so.connect("10.15.11.1", 53) ) {
+            cout << "Failed to connect to the dns server." << endl;
+            break;
+        }
+        string _question_pkg;
+        dns_generate_query_package("www.google.com", _question_pkg);
+        dump_hex(_question_pkg);
+        if ( !_test_udp_so.write_data(_question_pkg) ) {
+            cout << "failed to send request package" << endl;
+            break;
+        }
+        string _response_pkg;
+        SO_READ_STATUE _st = _test_udp_so.read_data(_response_pkg, 5000);
+        cout << "read statue: " << _st << endl;
+        if ( _st != SO_READ_DONE ) {
+            cout << "Cannot get response data." << endl;
+            break;
+        }
+        dump_hex(_response_pkg);
+        _test_udp_so.close();
+        break;
+    }
+
     // create the main loop thread
-    //thread _main_loop(tiny_distributer_worker);
+    thread _main_runloop(clnd_network_manager);
 
     // Wait for kill signal
     wait_for_exit_signal();
@@ -776,10 +909,11 @@ int main( int argc, char *argv[] ) {
     cp_log(log_info, "cleandns receive terminate signal");
 
     join_all_threads();
+    _main_runloop.join();
 
     //_main_loop.join();
     //stop_all_services();
-    cp_log(log_info, "tinydst terminated");
+    cp_log(log_info, "cleandns terminated");
     cp_log_stop();
     delete _g_service_config;
     return 0;

@@ -85,6 +85,51 @@ namespace cpputility
         } while( _pos < value.size() );
     }
 
+    // Dump binary package with HEX
+    static inline void dump_hex(const char *data, unsigned int length, FILE *of = stdout) {
+        const static unsigned int g_char_per_line = 16;
+        const static unsigned int g_addr_size = sizeof(intptr_t) * 2 + 2;
+        const static unsigned int g_line_buf_size = g_char_per_line * 4 + 3 + g_addr_size + 2;
+        unsigned int _lines = (length / g_char_per_line) + ((length % g_char_per_line) > 0 ? 1 : 0);
+        unsigned int _last_line_size = (_lines == 1) ? length : length % g_char_per_line;
+        if ( _last_line_size == 0 ) _last_line_size = g_char_per_line;
+
+        // Create the buffer
+        string _buf_line_str;
+        _buf_line_str.resize(g_line_buf_size);
+        char *_buf = &_buf_line_str[0];
+
+        // Loop to output the data
+        for ( unsigned int _l = 0; _l < _lines; ++_l ) { // for each line
+            unsigned int _line_size = (_l == _lines - 1) ? _last_line_size : g_char_per_line;
+            memset( _buf, 0x20, g_line_buf_size );
+            if ( sizeof(intptr_t) == 4 ) {  // 32bits
+                sprintf( _buf, "%08x: ", (unsigned int)(intptr_t)(data + (_l * g_char_per_line)) );
+            } else {  // 64bits
+                sprintf( _buf, "%016lx: ", (unsigned long)(intptr_t)(data + (_l * g_char_per_line)) );
+            }
+
+            for ( unsigned int _c = 0; _c < _line_size; ++_c ) {
+                sprintf( _buf + _c * 3 + g_addr_size, "%02x ", 
+                    (unsigned char)data[_l * g_char_per_line + _c]
+                );
+                _buf[ (_c + 1) * 3 + g_addr_size ] = ' ';  // Reset the '\0'
+                _buf[ g_char_per_line * 3 + 1 + _c + g_addr_size + 1 ] = 
+                    ( (isprint((unsigned char)(data[_l * g_char_per_line + _c])) ?
+                        data[_l * g_char_per_line + _c] : '.')
+                    );
+            }
+            _buf[ g_char_per_line * 3 + g_addr_size ] = '\t';
+            _buf[ g_char_per_line * 3 + g_addr_size + 1 ] = '|';
+            _buf[ g_line_buf_size - 3 ] = '|';
+            _buf[ g_line_buf_size - 2 ] = '\0';
+            fprintf(of, "%s\n", _buf);
+        }
+    }
+
+    static inline void dump_hex(const string &buffer, FILE *of = stdout) {
+        dump_hex(buffer.c_str(), buffer.size(), of);
+    }
 }
 
 #endif
