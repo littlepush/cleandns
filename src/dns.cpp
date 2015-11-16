@@ -43,6 +43,137 @@
 #include "dns.h"
 #include "string_format.hpp"
 
+bool clnd_dns_package::clnd_dns_support_recursive = true;
+uint16_t clnd_dns_package::clnd_dns_tid = 1;
+
+// DNS Package class
+clnd_dns_package::clnd_dns_package( const char *data, uint16_t len )
+{
+    memcpy((void *)&transaction_id_, data, sizeof(clnd_dns_package));
+}
+
+clnd_dns_package::clnd_dns_package( bool is_query, dns_opcode opcode, uint16_t qd_count)
+    : transaction_id_(clnd_dns_tid++), flags_(0), 
+    qd_count_( htons(qd_count) ), 
+    an_count_(0), ns_count_(0), ar_count_(0) 
+{
+    uint16_t _h_flag = ntohs(flags_);
+
+    // qr
+    if ( !is_query ) _h_flag |= 0x8000;
+    else _h_flag &= 0x7FFF;
+
+    // opcode
+    uint16_t _op_flag = (uint16_t)opcode;
+    _op_flag <<= 13;
+    _h_flag |= _op_flag;
+
+    // RD
+    _h_flag |= 0x0100;
+
+    flags_ = htons(_h_flag);
+};
+
+clnd_dns_package::clnd_dns_package( const clnd_dns_package &rhs )
+    : transaction_id_(rhs.transaction_id_), flags_(rhs.flags_),
+    qd_count_(rhs.qd_count_), an_count_(rhs.an_count_),
+    ns_count_(rhs.ns_count_), ar_count_(rhs.ar_count_) { }
+
+clnd_dns_package& clnd_dns_package::operator= (const clnd_dns_package &rhs )
+{
+    transaction_id_ = rhs.transaction_id_;
+    flags_ = rhs.flags_;
+    qd_count_ = rhs.qd_count_;
+    an_count_ = rhs.an_count_;
+    ns_count_ = rhs.ns_count_;
+    ar_count_ = rhs.ar_count_;
+    return *this;
+}
+size_t clnd_dns_package::size() const { return sizeof(uint16_t) * 5; }
+const char *const clnd_dns_package::pbuf() { return (char *)this; }
+
+clnd_dns_package * clnd_dns_package::dns_resp_package(string &buf, dns_rcode rcode) const {
+    buf.resize(sizeof(clnd_dns_package));
+    clnd_dns_package *_presp = new ((void*)&buf[0]) clnd_dns_package(*this);
+    uint16_t _h_flag = ntohs(flags_);
+    // Query -> Response
+    _h_flag |= 0x8000;
+    // RCode
+    (_h_flag &= 0xFFF0) |= ((uint16_t)rcode & 0x000F);
+    _presp->flags_ = htons(_h_flag);
+    return _presp;
+}
+
+clnd_dns_package * clnd_dns_package::dns_truncation_package( string &buf ) const {
+    buf.resize(sizeof(clnd_dns_package));
+    clnd_dns_package *_presp = new ((void*)&buf[0]) clnd_dns_package(*this);
+    uint16_t _h_flag = ntohs(flags_);
+    // Query -> Response
+    _h_flag |= 0x8000;
+    // Truncation
+    _h_flag |= 0x0200;
+    _presp->flags_ = htons(_h_flag);
+    return _presp;
+}
+
+uint16_t clnd_dns_package::get_transaction_id() const 
+{
+    return ntohs(transaction_id_);
+}
+bool clnd_dns_package::get_is_query_request() const
+{
+    uint16_t _h_flag = ntohs(flags_);
+    return (_h_flag & 0x8000) == 0;
+}
+bool clnd_dns_package::get_is_response_request() const
+{
+    uint16_t _h_flag = ntohs(flags_);
+    return (_h_flag & 0x8000) > 0;
+}
+dns_opcode clnd_dns_package::get_opcode() const
+{
+    uint16_t _h_flag = ntohs(flags_);
+    return (dns_opcode)((_h_flag >>= 13) & 0x000F);
+}
+bool clnd_dns_package::get_is_authoritative() const
+{
+    uint16_t _h_flag = ntohs(flags_);
+    return (_h_flag & 0x0400) > 0;
+}
+void clnd_dns_package::set_is_authoritative(bool auth)
+{
+    uint16_t _h_flag = ntohs(flags_);
+    _h_flag |= 0x0400;
+    flags_ = htons(_h_flag);
+}
+bool clnd_dns_package::get_is_truncation() const
+{
+    uint16_t _h_flag = ntohs(flags_);
+    return (_h_flag & 0x0200) > 0;
+}
+bool clnd_dns_package::get_is_recursive_desired() const
+{
+    uint16_t _h_flag = ntohs(flags_);
+    return (_h_flag & 0x0100) > 0;
+}
+void clnd_dns_package::set_is_recursive_desired(bool rd)
+{
+    uint16_t _h_flag = ntohs(flags_);
+    _h_flag |= 0x0100;
+    flags_ = htons(_h_flag);
+}
+bool clnd_dns_package::get_is_recursive_available() const
+{
+    uint16_t _h_flag = ntohs(flags_);
+    return (_h_flag & 0x0080) > 0;
+}
+dns_rcode clnd_dns_package::get_resp_code() const
+{
+    uint16_t _h_flag = ntohs(flags_);
+    return (dns_rcode)(_h_flag & 0x000F);
+}
+
+// DNS Method
 void _dns_format_domain(const string &dname, string &buf) {
     buf.resize(dname.size() + 2);
     char *_buf = &buf[0];
@@ -76,28 +207,25 @@ void _dns_get_format_domain( const char *data, string &domain ) {
 int dns_get_domain( const char *pkg, unsigned int len, std::string &domain )
 {
     // the package is too small
-    if ( len < sizeof(dns_header) ) return -1;
-
-    dns_header _dnsPkg;
-    memcpy(&_dnsPkg, pkg, sizeof(dns_header));
-    const char *_pDomain = pkg + sizeof(dns_header);
+    if ( len < sizeof(clnd_dns_package) ) return -1;
+    const char *_pDomain = pkg + sizeof(clnd_dns_package);
     _dns_get_format_domain(_pDomain, domain);
     return 0;
 }
 
-int dns_generate_query_package( const string &query_name, string& buffer, dns_qtype qtype ) {
-    static uint16_t g_tid = 0;
+int dns_generate_query_package( const string &query_name, string& buffer, dns_qtype qtype ) 
+{
     string _fdomain;
     _dns_format_domain(query_name, _fdomain);
-    buffer.resize(sizeof(dns_header) + _fdomain.size() + 2 * sizeof(uint8_t) + 2 * sizeof(uint8_t));
-    dns_header *_pheader = (dns_header *)&buffer[0];
-    memset(_pheader, sizeof(dns_header), 0);
-    _pheader->transaction_id = (++g_tid);
-    uint16_t *_pflags = (uint16_t *)((char *)_pheader + sizeof(uint16_t));
-    *_pflags = htons(0x0100);
-    _pheader->qd_count = htons(1);
-    char *_data_area = (char *)&buffer[0] + sizeof(dns_header);
+
+    // Buffer
+    buffer.resize(sizeof(clnd_dns_package) + _fdomain.size() + 2 * sizeof(uint8_t) + 2 * sizeof(uint8_t));
+    // Header
+    clnd_dns_package *_pquery = new ((void*)&buffer[0]) clnd_dns_package();
+    // Domain
+    char *_data_area = (char *)&buffer[0] + sizeof(clnd_dns_package);
     memcpy(_data_area, _fdomain.c_str(), _fdomain.size());
+    // Flags
     _data_area += _fdomain.size();
     uint16_t *_flag_area = (uint16_t *)_data_area;
     _flag_area[0] = htons(qtype);
@@ -105,14 +233,33 @@ int dns_generate_query_package( const string &query_name, string& buffer, dns_qt
     return buffer.size();
 }
 
-int dns_generate_tc_package( const string& incoming_pkg, string& buffer ) {
-    buffer.clear();
-    buffer.insert(0, incoming_pkg.c_str(), incoming_pkg.size());
-    dns_header *_pheader = (dns_header *)&buffer[0];
-    _pheader->flags.qr = true;
-    _pheader->flags.tc = true;
+int dns_generate_tc_package( const string& incoming_pkg, string& buffer ) 
+{
+    clnd_dns_package _ipkg(incoming_pkg.c_str(), sizeof(clnd_dns_package));
+    _ipkg.dns_truncation_package(buffer);
+    buffer.resize(incoming_pkg.size());
+    memcpy((char *)&buffer[0] + sizeof(clnd_dns_package), 
+        incoming_pkg.c_str() + sizeof(clnd_dns_package),
+        incoming_pkg.size() - sizeof(clnd_dns_package));
     return buffer.size();
 }
+
+int dns_generate_tcp_redirect_package( const string &incoming_pkg, string &buffer )
+{
+    buffer.resize(incoming_pkg.size() + sizeof(uint16_t));
+    uint16_t *_plen = (uint16_t *)&buffer[0];
+    *_plen = htons(incoming_pkg.size());
+    memcpy((char *)&buffer[2], incoming_pkg.c_str(), incoming_pkg.size());
+    return buffer.size();
+}
+
+int dns_generate_udp_response_package_from_tcp( const string &incoming_pkg, string &buffer )
+{
+    buffer.resize(incoming_pkg.size() - sizeof(uint16_t));
+    memcpy((char *)&buffer[0], incoming_pkg.c_str() + sizeof(uint16_t), incoming_pkg.size() - sizeof(uint16_t));
+    return buffer.size();
+}
+
 // cleandns.dns.cpp
 /*
  Push Chen.

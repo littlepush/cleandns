@@ -156,6 +156,7 @@ typedef struct tag_clnd_peerinfo {
     }
 
     tag_clnd_peerinfo() {}
+    tag_clnd_peerinfo(uint32_t addr, uint16_t p) : ip(addr), port(p) { }
     tag_clnd_peerinfo(const string &format_string) : port(0) {
         parse_peerinfo_string(format_string);
     }
@@ -615,6 +616,15 @@ void clnd_global_sort_filter() {
     }
 }
 
+// Search first match fitler or return the default one
+lp_clnd_filter clnd_search_match_filter(const string &domain)
+{
+    for ( auto _f : _g_filter_array ) {
+        if ( _f->is_match_filter( domain ) ) return _f;
+    }
+    return _g_default_filter;
+}
+
 void clnd_network_manager( ) {
     register_this_thread();
 
@@ -642,36 +652,118 @@ void clnd_network_manager( ) {
     }
 
     vector<sl_event> _event_list;
+
+    typedef pair<SOCKET_T, struct sockaddr_in> clnd_udp_value;
+
+    map <SOCKET_T, clnd_udp_value> _udp_redirect_cache;
+    map <SOCKET_T, clnd_udp_value> _udp_proxy_redirect_cache;
+    map <SOCKET_T, SOCKET_T> _tcp_redirect_cache;
+
     // Main run loop
     while ( this_thread_is_running() ) {
         _event_list.clear();
         sl_poller::server().fetch_events(_event_list);
         for ( auto &_event : _event_list ) {
             if ( _event.event == SL_EVENT_FAILED ) {
-                
-            } else if ( _event.event == SL_EVENT_ACCEPT ) {
-                // New incoming
+                // On error, remove all cache
                 if ( _event.socktype == IPPROTO_TCP ) {
-                    sl_poller::server().monitor_socket( _event.so, true );
+                    uint32_t _ipaddr; uint32_t _port;
+                    network_peer_info_from_socket(_event.so, _ipaddr, _port);
+                    clnd_ip _ip(_ipaddr);
+                    if ( _udp_proxy_redirect_cache.find(_event.so) != end(_udp_proxy_redirect_cache) ) {
+                        _udp_proxy_redirect_cache.erase(_event.so);
+                        cp_log(log_warning, "error on udp proxy redirected tcp socket(%d): %s:%u", 
+                            _event.so, _ip.ip.c_str(), _port);
+                    } else if ( _tcp_redirect_cache.find(_event.so) != end(_tcp_redirect_cache) ) {
+                        _tcp_redirect_cache.erase(_event.so);
+                        cp_log(log_warning, "error on tcp redirected tcp socket(%d): %s:%u", 
+                            _event.so, _ip.ip.c_str(), _port);
+                    }
+                } else {
+                    auto _it = _udp_redirect_cache.find(_event.so);
+                    clnd_peerinfo _pi(_event.address.sin_addr.s_addr, _event.address.sin_port);
+                    cp_log(log_warning, "error on udp redirected response socket(%d): %s:%u",
+                        _event.so, _pi.ip.ip.c_str(), _pi.port);
+                    if ( _it != end(_udp_redirect_cache) ) {
+                        _udp_redirect_cache.erase(_it);
+                    }
                 }
+            } else if ( _event.event == SL_EVENT_ACCEPT ) {
+                // New incoming, which will always be TCP
+                // Just add to monitor, waiting for some incoming request.
+                sl_poller::server().monitor_socket( _event.so, true );
             } else {
                 // New Data
                 if ( _event.socktype == IPPROTO_UDP ) {
-                    // UDP
+                    clnd_peerinfo _pi(_event.address.sin_addr.s_addr, _event.address.sin_port);
+
+                    // Get incoming data first.
                     sl_udpsocket _uso(_event.so, _event.address);
                     string _incoming_buf;
                     _uso.recv(_incoming_buf);
-                    dump_hex(_incoming_buf);
-                    string _tc_buf;
-                    dns_generate_tc_package(_incoming_buf, _tc_buf);
-                    dump_hex(_tc_buf);
-                    _uso.write_data(_tc_buf);
+
+                    // If is response
+                    if ( _udp_redirect_cache.find(_event.so) != end(_udp_redirect_cache) ) {
+                        // Response from parent
+                        // Get response data, then write to log
+                        // redirect response 
+                    } else {
+                        // Get domain
+                        string _domain;
+                        dns_get_domain(_incoming_buf.c_str(), _incoming_buf.size(), _domain);
+
+                        // Search a filter
+                        // if is local filter, generate a response package
+                        // else if use direct redirect, create a udp socket then send the package and wait, 
+                        // else, must be a proxy redirect, create a tcp redirect package, 
+                        //  add to redirect cache, then wait for the response
+                    }
+
+                    // string _rbuf;
+                    // dns_generate_tcp_redirect_package(_incoming_buf, _rbuf);
+                    // dump_hex(_rbuf);
+
+                    // sl_tcpsocket _tso(true);
+                    // _tso.setup_proxy("127.0.0.1", 1080);
+                    // _tso.connect("8.8.8.8", 53);
+                    // _tso.write_data(_rbuf);
+                    // sl_poller::server().monitor_socket( _tso.m_socket, true );
+                    // _udp_proxy_redirect_cache[_tso.m_socket] = make_pair(_uso.m_socket, _uso.m_sock_addr);
+
                 } else {
                     // TCP
                     sl_tcpsocket _tso(_event.so);
                     string _incoming_buf;
                     _tso.recv(_incoming_buf);
-                    dump_hex(_incoming_buf);
+
+                    if ( _udp_proxy_redirect_cache.find(_event.so) != end(_udp_redirect_cache) ) {
+                        // This is a udp proxy redirect, get the response ip, write to log and redirect the response
+                        // via origin udp socket.
+                        // then remove current so from the cache map
+                    } else if ( _tcp_redirect_cache.find(_event.so) != end(_tcp_redirect_cache) ) {
+                        // This is a tcp redirect(also can be a sock5 redirect)
+                        // get the response then write to log
+                        // send back to the origin tcp socket
+                        // remove current so from the cache map
+                    } else {
+                        // This is a new incoming tcp request
+                        string _domain;
+                        dns_get_domain(_incoming_buf.c_str() + sizeof(uint16_t), 
+                            _incoming_buf.size() - sizeof(uint16_t), _domain);
+
+                        // Search a filter
+                        // if is local filter, generate a response package
+                        // else if use direct redirect, create a tcp socket then send the package and wait,
+                        // else create a tcp socket via proxy, and send then wait.
+                        // both redirect should add self and the peer so to the cache.
+                        // remember to monitor all tcp so.
+                    }
+                    // auto _tit = _udp_proxy_redirect_cache.find(_tso.m_socket);
+                    // sl_udpsocket _uso(_tit->second.first, _tit->second.second);
+                    // string _rbuf;
+                    // dns_generate_udp_response_package_from_tcp(_incoming_buf, _rbuf);
+                    // dump_hex(_rbuf);
+                    // _uso.write_data(_rbuf);
                 }
             }
         }
@@ -874,31 +966,6 @@ int main( int argc, char *argv[] ) {
 
     // Hang current process
     set_signal_handler();
-
-    for ( ; ; ) {
-        sl_udpsocket _test_udp_so;
-        if ( !_test_udp_so.connect("10.15.11.1", 53) ) {
-            cout << "Failed to connect to the dns server." << endl;
-            break;
-        }
-        string _question_pkg;
-        dns_generate_query_package("www.google.com", _question_pkg);
-        dump_hex(_question_pkg);
-        if ( !_test_udp_so.write_data(_question_pkg) ) {
-            cout << "failed to send request package" << endl;
-            break;
-        }
-        string _response_pkg;
-        SO_READ_STATUE _st = _test_udp_so.read_data(_response_pkg, 5000);
-        cout << "read statue: " << _st << endl;
-        if ( _st != SO_READ_DONE ) {
-            cout << "Cannot get response data." << endl;
-            break;
-        }
-        dump_hex(_response_pkg);
-        _test_udp_so.close();
-        break;
-    }
 
     // create the main loop thread
     thread _main_runloop(clnd_network_manager);

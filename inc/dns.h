@@ -51,71 +51,6 @@
 
 using namespace std;
 
-#pragma pack(push, 1)
-typedef struct tag_dns_header {
-    /*!
-    A 16-bit field identifying a specific DNS transaction. The transaction ID is created by the message originator and is copied by the responder into its response message. Using the transaction ID, the DNS client can match responses to its requests.
-    */
-    uint16_t        transaction_id;
-    /*!
-    A 16-bit field containing various service flags that are communicated between the DNS client and the DNS server, including:
-    */
-    struct {
-        /*!
-        1-bit field set to 0 to represent a name service request or set to 1 to represent a name service response.
-        */
-        bool            qr:1;
-        /*!
-        4-bit field represents the name service operation of the packet: 0x0 is a query.
-        */
-        uint8_t         opcode:4;
-        /*!
-        1-bit field represents that the responder is authoritative for the domain name in the query message.
-        */
-        bool            aa:1;
-        /*!
-        1-bit field that is set to 1 if the total number of responses exceeded the User Datagram Protocol (UDP) datagram. Unless UDP datagrams larger than 512 bytes or EDNS0 are enabled, only the first 512 bytes of the UDP reply are returned.
-        */
-        bool            tc:1;
-        /*!
-        1-bit field set to 1 to indicate a recursive query and 0 for iterative queries. If a DNS server receives a query message with this field set to 0, it returns a list of other DNS servers that the client can contact. This list is populated from local cache data.
-        */
-        bool            rd:1;
-        /*!
-        1-bit field set by a DNS server to 1 to represent that the DNS server can handle recursive queries. If recursion is disabled, the DNS server sets the field appropriately.
-        */
-        bool            ra:1;
-        /*!
-        3-bit field that is reserved and set to 0.
-        */
-        uint8_t         z:3;
-        /*!
-        4-bit field holding the return code:
-        * 0 is a successful response (query answer is in the query response).
-
-        * 0x3 is a name error, indicating that an authoritative DNS server responded that the domain name in the query message does not exist. For more information about return codes, see DNS Reference Information.
-        */
-        uint8_t         rcode:4;
-    }               flags;
-    /*!
-    A 16-bit field representing the number of entries in the question section of the DNS message.
-    */
-    uint16_t        qd_count;
-    /*!
-    A 16-bit field representing the number of entries in the answer section of the DNS message.
-    */
-    uint16_t        an_count;
-    /*!
-    A 16-bit field representing the number of authority resource records in the DNS message.
-    */
-    uint16_t        ns_count;
-    /*!
-    A 16-bit field representing the number of additional resource records in the DNS message.
-    */
-    uint16_t        ar_count;
-} dns_header;
-#pragma pack(pop)
-
 // DNS Question Type
 typedef enum {
     dns_qtype_host          = 0x01,     // Host(A) record
@@ -136,16 +71,97 @@ typedef enum {
     dns_qclass_hs           = 0x0004    // Hesiod   
 } dns_qclass;
 
+typedef enum {
+    dns_opcode_standard     = 0,
+    dns_opcode_inverse      = 1,
+    dns_opcode_status       = 2,
+    dns_opcode_reserved_3   = 3,    // not use
+    dns_opcode_notify       = 4,        // in RFC 1996
+    dns_opcode_update       = 5         // in RFC 2136
+} dns_opcode;
+
+typedef enum {
+    dns_rcode_noerr             = 0,
+    dns_rcode_format_error      = 1,
+    dns_rcode_server_failure    = 2,
+    dns_rcode_name_error        = 3,
+    dns_rcode_not_impl          = 4,
+    dns_rcode_refuse            = 5,
+    dns_rcode_yxdomain          = 6,
+    dns_rcode_yxrrset           = 7,
+    dns_rcode_nxrrset           = 8,
+    dns_rcode_notauth           = 9,
+    dns_rcode_notzone           = 10,
+    dns_rcode_badvers           = 16,
+    dns_rcode_badsig            = 16,
+    dns_rcode_badkey            = 17,
+    dns_rcode_badtime           = 18,
+    dns_rcode_badmode           = 19,
+    dns_rcode_badname           = 20,
+    dns_rcode_badalg            = 21
+} dns_rcode;
+
+#pragma pack(push, 1)
+class clnd_dns_package {
+protected:
+    uint16_t        transaction_id_;
+    uint16_t        flags_;
+    uint16_t        qd_count_;
+    uint16_t        an_count_;
+    uint16_t        ns_count_;
+    uint16_t        ar_count_;
+public:
+    // Properties
+    uint16_t        get_transaction_id() const;
+    bool            get_is_query_request() const;
+    bool            get_is_response_request() const;
+    dns_opcode      get_opcode() const;
+    bool            get_is_authoritative() const;
+    void            set_is_authoritative(bool auth = false);
+    bool            get_is_truncation() const;
+    bool            get_is_recursive_desired() const;
+    void            set_is_recursive_desired(bool rd = true);
+    bool            get_is_recursive_available() const;
+    dns_rcode       get_resp_code() const;
+
+    clnd_dns_package( const char *data, uint16_t len );
+    clnd_dns_package( bool is_query = true, dns_opcode opcode = dns_opcode_standard, uint16_t qd_count = 1 );
+    clnd_dns_package( const clnd_dns_package &rhs );
+    clnd_dns_package& operator= (const clnd_dns_package &rhs );
+
+    // The size of the package, should always be 10
+    size_t size() const;
+    // The buffer point of the package
+    const char *const pbuf();
+
+    clnd_dns_package *dns_resp_package(string &buf, dns_rcode rcode) const;
+    clnd_dns_package *dns_truncation_package( string &buf ) const;
+
+protected:
+    static bool clnd_dns_support_recursive;
+    static uint16_t clnd_dns_tid;
+public:
+    static void set_support_recursive( bool ra = true );
+};
+
+#pragma pack(pop)
+
 // Get the domain from the dns querying package.
 // The query domain seg will store the domain in the following format:
 // [length:1Byte][component][length:1Byte][component]...
 int dns_get_domain( const char *pkg, unsigned int len, std::string &domain );
 
 // Generate a query package
-int dns_generate_query_package( const string &query_name, string& buffer, dns_qtype qtype = dns_qtype_all );
+int dns_generate_query_package( const string &query_name, string& buffer, dns_qtype qtype = dns_qtype_host );
 
 // Generate a tc package
 int dns_generate_tc_package( const string& incoming_pkg, string& buffer );
+
+// Generate a tcp redirect package
+int dns_generate_tcp_redirect_package( const string &incoming_pkg, string &buffer );
+
+// Generate a udp redirect package from tcp response
+int dns_generate_udp_response_package_from_tcp( const string &incoming_pkg, string &buffer );
 
 #endif
 
