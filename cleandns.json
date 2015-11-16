@@ -14,7 +14,7 @@
             "name" : "gfwlist",
             "mode" : "redirect",
             "server" : "8.8.8.8",
-            "socks5" : "127.0.0.1:4098",
+            "socks5" : "127.0.0.1:1080",
             "rulelist" : [
                 "*google.com",
                 "*twitter.com"
