@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.5
+// Current Version: 0.5-1-gd084051
 
 #include "socketlite.h"
 // src/socket.cpp
@@ -368,8 +368,15 @@ size_t sl_poller::fetch_events( sl_poller::earray &events, unsigned int timedout
 			getsockopt( _e.so, SOL_SOCKET, SO_ERROR, 
 					(char *)&_error, (socklen_t *)&_len);
 			_e.event = (_error != 0) ? SL_EVENT_FAILED : SL_EVENT_DATA;
+			
+            int _type;
 			getsockopt( _e.so, SOL_SOCKET, SO_TYPE,
-					(char *)&_e.socktype, (socklen_t *)&_len);
+					(char *)&_type, (socklen_t *)&_len);
+            if ( _type == SOCK_STREAM ) {
+                _e.socktype = IPPROTO_TCP;
+            } else {
+                _e.socktype = IPPROTO_UDP;
+            }
 			events.push_back(_e);
 		}
 	}

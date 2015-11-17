@@ -425,7 +425,6 @@ public:
     }
 
     virtual bool is_match_filter(const string &query_domain) const {
-        cout << "Query: " << query_domain << endl;
         auto _rit = rules_.find(query_domain);
         if ( _rit != end(rules_) ) {
             return _rit->second;
@@ -452,12 +451,9 @@ public:
             }
         }
         for ( auto _f : _query_format ) {
-            cout << "check " << _f << "...";
             if ( rules_.find(_f) != end(rules_) ) {
-                cout << "\033[1;32mMatch\033[0m" << endl;
                 return true;
             }
-            cout << "\033[1;33mDismatch\033[0m" << endl;
         }
         return false;
     }
@@ -538,7 +534,7 @@ public:
         port_ = check_key_with_default(config_node, "port", 53).asUInt();
         logpath_ = check_key_with_default(config_node, "logpath", "syslog").asString();
         loglv_ = _loglv_from_string(
-            check_key_with_default(config_node, "loglevel", "info").asString()
+            check_key_with_default(config_node, "loglv", "info").asString()
             );
         daemon_ = check_key_with_default(config_node, "daemon", true).asBool();
         pidfile_ = check_key_with_default(config_node, "pidfile", "/var/run/cleandns/pid").asString();
@@ -675,8 +671,8 @@ void clnd_network_manager( ) {
     vector<sl_event> _event_list;
 
     typedef pair<SOCKET_T, struct sockaddr_in> clnd_udp_value;
-
-    map <SOCKET_T, clnd_udp_value> _udp_redirect_cache;
+    typedef pair<struct sockaddr_in, clnd_udp_value> clnd_rudp_value;
+    map <SOCKET_T, clnd_rudp_value> _udp_redirect_cache;
     map <SOCKET_T, clnd_udp_value> _udp_proxy_redirect_cache;
     map <SOCKET_T, SOCKET_T> _tcp_redirect_cache;
 
@@ -702,11 +698,18 @@ void clnd_network_manager( ) {
                     }
                 } else {
                     auto _it = _udp_redirect_cache.find(_event.so);
-                    clnd_peerinfo _pi(_event.address.sin_addr.s_addr, _event.address.sin_port);
-                    cp_log(log_warning, "error on udp redirected response socket(%d): %s:%u",
-                        _event.so, _pi.ip.ip.c_str(), _pi.port);
+                    clnd_peerinfo _pi;
+                    //clnd_peerinfo _pi(_event.address.sin_addr.s_addr, _event.address.sin_port);
                     if ( _it != end(_udp_redirect_cache) ) {
+                        clnd_rudp_value _rudp_info = _it->second;
+                        struct sockaddr_in _rudp_addr = _rudp_info.first;
+                        _pi.ip = _rudp_addr.sin_addr.s_addr;
+                        _pi.port = _rudp_addr.sin_port;
+                        cp_log(log_warning, "error on udp redirected response socket(%d): %s:%u",
+                            _event.so, _pi.ip.ip.c_str(), _pi.port);
                         _udp_redirect_cache.erase(_it);
+                    } else {
+                        cp_log(log_warning, "error on udp socket");
                     }
                 }
             } else if ( _event.event == SL_EVENT_ACCEPT ) {
@@ -718,17 +721,23 @@ void clnd_network_manager( ) {
                 if ( _event.socktype == IPPROTO_UDP ) {
                     clnd_peerinfo _pi(_event.address.sin_addr.s_addr, _event.address.sin_port);
 
-                    // Get incoming data first.
-                    sl_udpsocket _uso(_event.so, _event.address);
-                    string _incoming_buf;
-                    _uso.recv(_incoming_buf);
-
                     // If is response
                     if ( _udp_redirect_cache.find(_event.so) != end(_udp_redirect_cache) ) {
+                        clnd_rudp_value _rudp_info = _udp_redirect_cache[_event.so];
+                        sl_udpsocket _ruso(_event.so, _rudp_info.first);
+                        struct sockaddr_in _sock_info = _rudp_info.first;
+                        _pi.ip = _sock_info.sin_addr.s_addr;
+                        _pi.port = _sock_info.sin_port;
+
+                        string _incoming_buf;
+                        _ruso.recv(_incoming_buf);
+
+                        cout << "UDP Response: " << endl;
+                        dump_hex(_incoming_buf);
                         // Response from parent
                         // Get response data, then write to log
                         // redirect response
-                        clnd_udp_value _udp_info = _udp_redirect_cache[_event.so];
+                        clnd_udp_value _udp_info = _rudp_info.second;
                         sl_udpsocket _uso(_udp_info.first, _udp_info.second);
                         _uso.write_data(_incoming_buf);
 
@@ -736,36 +745,52 @@ void clnd_network_manager( ) {
 
                         _udp_redirect_cache.erase(_event.so);
                     } else {
+                        cp_log(log_info, "get new incoming udp request from %s:%u.",
+                            _pi.ip.ip.c_str(), _pi.port);
+                        // Get incoming data first.
+                        sl_udpsocket _uso(_event.so, _event.address);
+                        string _incoming_buf;
+                        _uso.recv(_incoming_buf);
+
+                        cout << "UDP Incoming: " << endl;
+                        dump_hex(_incoming_buf);
+
                         // Get domain
                         string _domain;
                         dns_get_domain(_incoming_buf.c_str(), _incoming_buf.size(), _domain);
-
+                        cp_log(log_info, "try to query domain %s", _domain.c_str());
                         // Search a filter
                         lp_clnd_filter _f = clnd_search_match_filter(_domain);
                         // if is local filter, generate a response package
                         if ( _f->mode == clnd_filter_mode_local ) {
                             // todo:
+                            cout << "Get local domain" << endl;
                             #warning todo
                         } 
                         // else if use direct redirect, create a udp socket then send the package and wait, 
                         else if ( _f->socks5 == false ) {
-                            if ( _f->protocol & clnd_protocol_udp ) {
+                            cp_log(log_info, "the filter, %s, tell me to use direct redirect on domain %s",
+                                _f->name.c_str(), _domain.c_str());
+                            if ( _f->protocol & clnd_protocol_udp || _f->protocol == clnd_protocol_inhiert ) {
+                                cp_log(log_debug, "redirect incoming(%s:%u) via udp for domain: %s",
+                                    _pi.ip.ip.c_str(), _pi.port, _domain.c_str());
                                 sl_udpsocket _ruso(true);
                                 if ( !_ruso.connect(_f->parent.ip, _f->parent.port) ) {
-                                    cp_log(log_error, "failed to connect parent server for %s(%s:%u)",
+                                    cp_log(log_error, "failed to connect parent server via udp for %s(%s:%u)",
                                         _f->name.c_str(), _f->parent.ip.ip.c_str(), _f->parent.port);
-                                    _uso.close();
                                     continue;
                                 }
                                 _ruso.write_data(_incoming_buf);
                                 sl_poller::server().monitor_socket(_ruso.m_socket, true);
-                                _udp_redirect_cache[_ruso.m_socket] = make_pair(_uso.m_socket, _uso.m_sock_addr);
+                                clnd_udp_value _udp_info = make_pair(_uso.m_socket, _uso.m_sock_addr);
+                                _udp_redirect_cache[_ruso.m_socket] = make_pair(_ruso.m_sock_addr, _udp_info);
                             } else {
+                                cp_log(log_debug, "redirect incoming(%s:%u) via tcp for domain: %s",
+                                    _pi.ip.ip.c_str(), _pi.port, _domain.c_str());
                                 sl_tcpsocket _rtso(true);
                                 if ( !_rtso.connect(_f->parent.ip, _f->parent.port) ) {
-                                    cp_log(log_error, "failed to connect parent server for %s(%s:%u)",
+                                    cp_log(log_error, "failed to connect parent server via tcp for %s(%s:%u)",
                                         _f->name.c_str(), _f->parent.ip.ip.c_str(), _f->parent.port);
-                                    _uso.close();
                                     continue;
                                 }
                                 string _rbuf;
@@ -778,15 +803,17 @@ void clnd_network_manager( ) {
                         // else, must be a proxy redirect, create a tcp redirect package, 
                         //  add to redirect cache, then wait for the response
                         else {
+                            cp_log(log_info, "the filter(%s) use a socks5 proxy for domain %s",
+                                _f->name.c_str(), _domain.c_str());
                             sl_tcpsocket _rtso(true);
                             if ( !_rtso.setup_proxy(_f->socks5.ip, _f->socks5.port) ) {
                                 cp_log(log_error, "failed to connect parent socks5 proxy for %s(%s:%u)",
                                     _f->name.c_str(), _f->socks5.ip.ip.c_str(), _f->socks5.port);
+                                continue;
                             }
                             if ( !_rtso.connect(_f->parent.ip, _f->parent.port) ) {
-                                cp_log(log_error, "failed to connect parent server for %s(%s:%u)",
+                                cp_log(log_error, "failed to connect parent server via tcp with proxy for %s(%s:%u)",
                                     _f->name.c_str(), _f->parent.ip.ip.c_str(), _f->parent.port);
-                                _uso.close();
                                 continue;
                             }
                             string _rbuf;
@@ -802,7 +829,15 @@ void clnd_network_manager( ) {
                     string _incoming_buf;
                     _tso.recv(_incoming_buf);
 
-                    if ( _udp_proxy_redirect_cache.find(_event.so) != end(_udp_redirect_cache) ) {
+                    uint32_t _ipaddr, _port;
+                    network_peer_info_from_socket(_tso.m_socket, _ipaddr, _port);
+                    clnd_peerinfo _pi(_ipaddr, _port);
+
+                    cout << "TCP Incoming: " << endl;
+                    dump_hex(_incoming_buf);
+                    if ( _udp_proxy_redirect_cache.find(_event.so) != end(_udp_proxy_redirect_cache) ) {
+                        cp_log(log_debug, "get response from %s:%u via socks5 proxy.",
+                            _pi.ip.ip.c_str(), _pi.port);
                         // This is a udp proxy redirect, get the response ip, write to log and redirect the response
                         // via origin udp socket.
                         #warning to pares the response body
@@ -815,6 +850,8 @@ void clnd_network_manager( ) {
                         // then remove current so from the cache map
                         _udp_proxy_redirect_cache.erase(_event.so);
                     } else if ( _tcp_redirect_cache.find(_event.so) != end(_tcp_redirect_cache) ) {
+                        cp_log(log_debug, "get response from %s:%u for direct redirect.",
+                            _pi.ip.ip.c_str(), _pi.port);
                         // This is a tcp redirect(also can be a sock5 redirect)
                         // get the response then write to log
                         #warning to pares the response body
@@ -825,6 +862,9 @@ void clnd_network_manager( ) {
                         _tcp_redirect_cache.erase(_event.so);
                     } else {
                         // This is a new incoming tcp request
+                        cp_log(log_info, "get new incoming tcp request from %s:%u.",
+                            _pi.ip.ip.c_str(), _pi.port);
+
                         string _domain;
                         dns_get_domain(_incoming_buf.c_str() + sizeof(uint16_t), 
                             _incoming_buf.size() - sizeof(uint16_t), _domain);
@@ -838,14 +878,35 @@ void clnd_network_manager( ) {
                         } 
                         // else if use direct redirect, create a tcp socket then send the package and wait,
                         else if ( _f->socks5 == false ) {
-
+                            sl_tcpsocket _rtso(true);
+                            if ( !_rtso.connect(_f->parent.ip, _f->parent.port) ) {
+                                cp_log(log_error, "failed to connect parent server via tcp for %s(%s:%u)",
+                                    _f->name.c_str(), _f->parent.ip.ip.c_str(), _f->parent.port);
+                                _tso.close();
+                                continue;
+                            }
+                            _rtso.write_data(_incoming_buf);
+                            sl_poller::server().monitor_socket(_rtso.m_socket, true);
+                            _tcp_redirect_cache[_rtso.m_socket] = _tso.m_socket;
                         }
                         // else create a tcp socket via proxy, and send then wait.
                         else {
-
+                            sl_tcpsocket _rtso(true);
+                            if ( !_rtso.setup_proxy(_f->socks5.ip, _f->socks5.port) ) {
+                                cp_log(log_error, "failed to connect parent socks5 proxy for %s(%s:%u)",
+                                    _f->name.c_str(), _f->socks5.ip.ip.c_str(), _f->socks5.port);
+                                continue;
+                            }
+                            if ( !_rtso.connect(_f->parent.ip, _f->parent.port) ) {
+                                cp_log(log_error, "failed to connect parent server via tcp with proxy for %s(%s:%u)",
+                                    _f->name.c_str(), _f->parent.ip.ip.c_str(), _f->parent.port);
+                                _tso.close();
+                                continue;
+                            }
+                            _rtso.write_data(_incoming_buf);
+                            sl_poller::server().monitor_socket(_rtso.m_socket, true);
+                            _tcp_redirect_cache[_rtso.m_socket] = _tso.m_socket;
                         }
-                        // both redirect should add self and the peer so to the cache.
-                        // remember to monitor all tcp so.
                     }
                 }
             }
@@ -980,13 +1041,8 @@ int main( int argc, char *argv[] ) {
         cout << "Invalidate default filter config" << endl;
         return 3;
     }
-    // Dump the filter
-#if DEBUG
-    cout << _g_default_filter;
-#endif
     // Start service
     _g_service_config = new clnd_config_service(_config_service);
-
 
     if ( _g_service_config->daemon ) {
         pid_t _pid = fork();
@@ -1021,31 +1077,6 @@ int main( int argc, char *argv[] ) {
 
     // Sort the filter
     clnd_global_sort_filter();
-
-#if DEBUG
-    for ( auto f : _g_filter_array ) {
-        cout << "check push.meetutech.com: " << 
-            (f->is_match_filter("push.meetutech.com") ? "\033[1;32mYES\033[0m" : "\033[1;31mNO\033[0m")
-            << endl;
-        cout << "check exsi.meetutech.com: " << 
-            (f->is_match_filter("exsi.meetutech.com") ? "\033[1;32mYES\033[0m" : "\033[1;31mNO\033[0m")
-            << endl;
-        cout << "check office.meetutech.net: " << 
-            (f->is_match_filter("office.meetutech.net") ? "\033[1;32mYES\033[0m" : "\033[1;31mNO\033[0m")
-            << endl;
-
-        cout << "check www.meetutech.com: " << 
-            (f->is_match_filter("www.meetutech.com") ? "\033[1;32mYES\033[0m" : "\033[1;31mNO\033[0m")
-            << endl;
-        cout << "check mail.meetutech.com: " << 
-            (f->is_match_filter("mail.meetutech.com") ? "\033[1;32mYES\033[0m" : "\033[1;31mNO\033[0m")
-            << endl;
-        cout << "check ftp.meetutech.com: " << 
-            (f->is_match_filter("ftp.meetutech.com") ? "\033[1;32mYES\033[0m" : "\033[1;31mNO\033[0m")
-            << endl;
-        cout << f;
-    }
-#endif
 
     // Hang current process
     set_signal_handler();
