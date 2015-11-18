@@ -48,6 +48,7 @@
 #include <iostream>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 using namespace std;
 
@@ -124,8 +125,13 @@ public:
     bool            get_is_recursive_available() const;
     dns_rcode       get_resp_code() const;
 
-    clnd_dns_package( const char *data, uint16_t len );
+    uint16_t        get_qd_count() const;
+    uint16_t        get_an_count() const;
+    uint16_t        get_ns_count() const;
+    uint16_t        get_ar_count() const;
+
     clnd_dns_package( bool is_query = true, dns_opcode opcode = dns_opcode_standard, uint16_t qd_count = 1 );
+    clnd_dns_package( const char *data, uint16_t len );
     clnd_dns_package( const clnd_dns_package &rhs );
     clnd_dns_package& operator= (const clnd_dns_package &rhs );
 
@@ -134,7 +140,7 @@ public:
     // The buffer point of the package
     const char *const pbuf();
 
-    clnd_dns_package *dns_resp_package(string &buf, dns_rcode rcode) const;
+    clnd_dns_package *dns_resp_package(string &buf, dns_rcode rcode, uint16_t ancount = 1) const;
     clnd_dns_package *dns_truncation_package( string &buf ) const;
 
 protected:
@@ -162,6 +168,15 @@ int dns_generate_tcp_redirect_package( const string &incoming_pkg, string &buffe
 
 // Generate a udp redirect package from tcp response
 int dns_generate_udp_response_package_from_tcp( const string &incoming_pkg, string &buffer );
+
+// Generate the A records response from the received package
+void dns_generate_a_records_resp( const char *pkg, unsigned int len, vector<uint32_t> ipaddress, string &buf );
+
+// Generate the C Name records response from the received package
+void dns_gnerate_cname_records_resp( const char *pkg, unsigned int len, vector<string> cnamelist, string &buf );
+
+// Get all available A records from a package
+void dns_get_a_records( const char *pkg, unsigned int len, string &qdomain, vector<uint32_t> &a_records );
 
 #endif
 

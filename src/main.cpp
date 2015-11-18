@@ -74,6 +74,12 @@ Roadmap
 
 using namespace cpputility;
 
+#if DEBUG
+#define DUMP_HEX(...)       dump_hex(__VA_ARGS__)
+#else
+#define DUMP_HEX(...)
+#endif
+
 #ifdef CLRD_AUTO_GENERATE_DOC
 #include "doc_header_auto_generate.h"
 #endif
@@ -90,17 +96,9 @@ The IP object, compatible with std::string and uint32_t
 This is a ipv4 ip address class.
 */
 typedef struct tag_clnd_ip {
-    string          ip;
-
-    tag_clnd_ip() {}
-    tag_clnd_ip(const string &ipaddr) : ip(ipaddr) {}
-    tag_clnd_ip(const tag_clnd_ip& rhs) : ip(rhs.ip) {}
-    tag_clnd_ip(uint32_t ipaddr) {
-        this->operator =(ipaddr);
-    }
-    operator uint32_t() const {
+    static uint32_t string_to_ipaddr(const string &ipaddr) {
         vector<string> _components;
-        string _clean_ipstring(this->ip);
+        string _clean_ipstring(ipaddr);
         trim(_clean_ipstring);
         // Split the ip address
         split_string(_clean_ipstring, ".", _components);
@@ -114,6 +112,17 @@ typedef struct tag_clnd_ip {
         }
         return _ipaddr;
     }
+    string          ip;
+
+    tag_clnd_ip() {}
+    tag_clnd_ip(const string &ipaddr) : ip(ipaddr) {}
+    tag_clnd_ip(const tag_clnd_ip& rhs) : ip(rhs.ip) {}
+    tag_clnd_ip(uint32_t ipaddr) {
+        this->operator =(ipaddr);
+    }
+    operator uint32_t() const {
+        return tag_clnd_ip::string_to_ipaddr(this->ip);
+    }
     operator string&() { return ip; }
     operator const string&() const { return ip; }
 
@@ -123,6 +132,7 @@ typedef struct tag_clnd_ip {
     }
 
     tag_clnd_ip & operator = (uint32_t ipaddr) {
+        ipaddr = htonl(ipaddr);
         char _ip_[16] = {0};
         sprintf( _ip_, "%u.%u.%u.%u",
             (ipaddr >> (0 * 8)) & 0x00FF,
@@ -326,6 +336,11 @@ ostream & operator << (ostream &os, const clnd_filter* filter) {
     return os;
 }
 
+typedef enum {
+    clnd_local_result_type_A        = 1,
+    clnd_local_result_type_CName    = 2
+} clnd_local_result_type;
+
 class clnd_filter_local : public clnd_filter {
     string                              domain_;
     map<string, vector<clnd_ip> >       A_records_;
@@ -400,6 +415,29 @@ public:
         if ( A_records_.find(_sub) != end(A_records_) ) return true;
         if ( CName_records_.find(_sub) != end(CName_records_) ) return true;
         return false;
+    }
+
+    void get_result_for_domain(
+        const string &query_domain, 
+        vector<string> &results, 
+        clnd_local_result_type &type) const {
+
+        size_t _qs = query_domain.size();
+        size_t _ds = domain.size();
+        string _sub = query_domain.substr(0, _qs - _ds - 1);
+        if ( A_records_.find(_sub) != end(A_records_) ) {
+            auto _a_it = A_records_.find(_sub);
+            results.clear();
+            for ( auto& _ip_it : _a_it->second ) {
+                results.push_back(_ip_it.ip);
+            }
+            type = clnd_local_result_type_A;
+        }
+        if ( CName_records_.find(_sub) != end(CName_records_) ) {
+            auto _c_it = CName_records_.find(_sub);
+            results.push_back(_c_it->second);
+            type = clnd_local_result_type_CName;
+        }
     }
 };
 
@@ -642,6 +680,16 @@ lp_clnd_filter clnd_search_match_filter(const string &domain)
     return _g_default_filter;
 }
 
+void clnd_dump_a_records(const char *pkg, unsigned int len) {
+    string _qdomain;
+    vector<uint32_t> _a_records;
+    dns_get_a_records(pkg , len, _qdomain, _a_records);
+    for ( auto _a_ip : _a_records ) {
+        clnd_ip _ip(_a_ip);
+        cp_log(log_info, "domain: %s, A: %s", _qdomain.c_str(), _ip.ip.c_str());
+    }
+}
+
 void clnd_network_manager( ) {
     register_this_thread();
 
@@ -732,8 +780,10 @@ void clnd_network_manager( ) {
                         string _incoming_buf;
                         _ruso.recv(_incoming_buf);
 
+                        #if DEBUG
                         cout << "UDP Response: " << endl;
-                        dump_hex(_incoming_buf);
+                        #endif
+                        DUMP_HEX(_incoming_buf);
                         // Response from parent
                         // Get response data, then write to log
                         // redirect response
@@ -741,7 +791,7 @@ void clnd_network_manager( ) {
                         sl_udpsocket _uso(_udp_info.first, _udp_info.second);
                         _uso.write_data(_incoming_buf);
 
-                        #warning to parse the response data.
+                        clnd_dump_a_records(_incoming_buf.c_str(), _incoming_buf.size());
 
                         _udp_redirect_cache.erase(_event.so);
                     } else {
@@ -752,8 +802,10 @@ void clnd_network_manager( ) {
                         string _incoming_buf;
                         _uso.recv(_incoming_buf);
 
+                        #if DEBUG
                         cout << "UDP Incoming: " << endl;
-                        dump_hex(_incoming_buf);
+                        #endif
+                        DUMP_HEX(_incoming_buf);
 
                         // Get domain
                         string _domain;
@@ -763,9 +815,32 @@ void clnd_network_manager( ) {
                         lp_clnd_filter _f = clnd_search_match_filter(_domain);
                         // if is local filter, generate a response package
                         if ( _f->mode == clnd_filter_mode_local ) {
-                            // todo:
-                            cout << "Get local domain" << endl;
-                            #warning todo
+                            shared_ptr<clnd_filter_local> _lf = dynamic_pointer_cast<clnd_filter_local>(_f);
+                            vector<string> _local_result;
+                            clnd_local_result_type _type;
+                            _lf->get_result_for_domain(_domain, _local_result, _type);
+
+                            string _rbuf;
+                            if ( _type == clnd_local_result_type_A ) {
+                                vector<uint32_t> _ARecords;
+                                for ( auto _ip : _local_result ) {
+                                    _ARecords.push_back(clnd_ip::string_to_ipaddr(_ip));
+                                }
+                                dns_generate_a_records_resp(
+                                    _incoming_buf.c_str(), 
+                                    _incoming_buf.size(), 
+                                    _ARecords, 
+                                    _rbuf);
+                            } else {
+                                dns_gnerate_cname_records_resp(
+                                    _incoming_buf.c_str(),
+                                    _incoming_buf.size(),
+                                    _local_result,
+                                    _rbuf
+                                    );
+                            }
+                            DUMP_HEX(_rbuf);
+                            _uso.write_data(_rbuf);
                         } 
                         // else if use direct redirect, create a udp socket then send the package and wait, 
                         else if ( _f->socks5 == false ) {
@@ -833,19 +908,22 @@ void clnd_network_manager( ) {
                     network_peer_info_from_socket(_tso.m_socket, _ipaddr, _port);
                     clnd_peerinfo _pi(_ipaddr, _port);
 
+                    #if DEBUG
                     cout << "TCP Incoming: " << endl;
-                    dump_hex(_incoming_buf);
+                    #endif
+                    DUMP_HEX(_incoming_buf);
                     if ( _udp_proxy_redirect_cache.find(_event.so) != end(_udp_proxy_redirect_cache) ) {
                         cp_log(log_debug, "get response from %s:%u via socks5 proxy.",
                             _pi.ip.ip.c_str(), _pi.port);
                         // This is a udp proxy redirect, get the response ip, write to log and redirect the response
                         // via origin udp socket.
-                        #warning to pares the response body
                         clnd_udp_value _udp_info = _udp_proxy_redirect_cache[_event.so];
                         sl_udpsocket _ruso(_udp_info.first, _udp_info.second);
 
                         string _rbuf;
                         dns_generate_udp_response_package_from_tcp(_incoming_buf, _rbuf);
+
+                        clnd_dump_a_records(_rbuf.c_str(), _rbuf.size());
                         _ruso.write_data(_rbuf);
                         // then remove current so from the cache map
                         _udp_proxy_redirect_cache.erase(_event.so);
@@ -854,7 +932,7 @@ void clnd_network_manager( ) {
                             _pi.ip.ip.c_str(), _pi.port);
                         // This is a tcp redirect(also can be a sock5 redirect)
                         // get the response then write to log
-                        #warning to pares the response body
+                        clnd_dump_a_records(_incoming_buf.c_str() + 2, _incoming_buf.size() - 2);
                         // send back to the origin tcp socket
                         sl_tcpsocket _rtso(_tcp_redirect_cache[_event.so]);
                         _rtso.write_data(_incoming_buf);
@@ -874,7 +952,34 @@ void clnd_network_manager( ) {
                         // if is local filter, generate a response package
                         if ( _f->mode == clnd_filter_mode_local ) {
                             // todo:
-                            #warning todo
+                            shared_ptr<clnd_filter_local> _lf = dynamic_pointer_cast<clnd_filter_local>(_f);
+                            vector<string> _local_result;
+                            clnd_local_result_type _type;
+                            _lf->get_result_for_domain(_domain, _local_result, _type);
+
+                            string _rbuf;
+                            if ( _type == clnd_local_result_type_A ) {
+                                vector<uint32_t> _ARecords;
+                                for ( auto _ip : _local_result ) {
+                                    _ARecords.push_back(clnd_ip::string_to_ipaddr(_ip));
+                                }
+                                dns_generate_a_records_resp(
+                                    _incoming_buf.c_str(), 
+                                    _incoming_buf.size(), 
+                                    _ARecords, 
+                                    _rbuf);
+                            } else {
+                                dns_gnerate_cname_records_resp(
+                                    _incoming_buf.c_str(),
+                                    _incoming_buf.size(),
+                                    _local_result,
+                                    _rbuf
+                                    );
+                            }
+                            string _trbuf;
+                            dns_generate_tcp_redirect_package(_rbuf, _trbuf);
+                            DUMP_HEX(_trbuf);
+                            _tso.write_data(_trbuf);
                         } 
                         // else if use direct redirect, create a tcp socket then send the package and wait,
                         else if ( _f->socks5 == false ) {

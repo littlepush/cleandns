@@ -7,7 +7,7 @@
         "pidfile" : "~/cleandns.pid"
     }, 
     "default" : {
-        "server" : "119.29.29.29"
+        "server" : "202.96.209.133"
     },
     "filters" : [
         {
