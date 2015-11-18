@@ -455,7 +455,7 @@ void dns_get_a_records( const char *pkg, unsigned int len, string &qdomain, vect
         _pbuf += sizeof(uint16_t);
 
         if ( _need_a_records ) {
-            uint32_t _a_rec = ntohl(*(uint32_t *)_pbuf);
+            uint32_t _a_rec = *(uint32_t *)_pbuf;
             a_records.push_back(_a_rec);
         }
         _pbuf += _rlen;

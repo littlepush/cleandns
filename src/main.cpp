@@ -132,7 +132,6 @@ typedef struct tag_clnd_ip {
     }
 
     tag_clnd_ip & operator = (uint32_t ipaddr) {
-        ipaddr = htonl(ipaddr);
         char _ip_[16] = {0};
         sprintf( _ip_, "%u.%u.%u.%u",
             (ipaddr >> (0 * 8)) & 0x00FF,
