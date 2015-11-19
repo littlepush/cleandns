@@ -213,6 +213,7 @@ string clnd_protocol_string(clnd_protocol_t protocol) {
         case clnd_protocol_tcp: return "tcp";
         case clnd_protocol_udp: return "udp";
         case clnd_protocol_all: return "all";
+        default: return "inhiert";
     };
 }
 
@@ -277,6 +278,7 @@ static string clnd_filter_mode_string(clnd_filter_mode mode) {
         case clnd_filter_mode_unknow: return "unknow";
         case clnd_filter_mode_local: return "local";
         case clnd_filter_mode_redirect: return "redirect";
+        default: return "unknow";
     };
 }
 
@@ -476,10 +478,10 @@ public:
         split_string(query_domain, ".", _coms);
 
         vector<string> _query_format;
-        for ( int com_count = 1; com_count <= _coms.size(); ++com_count ) {
-            for ( int i = 0; i <= (_coms.size() - com_count); ++i ) {
+        for ( size_t com_count = 1; com_count <= _coms.size(); ++com_count ) {
+            for ( size_t i = 0; i <= (_coms.size() - com_count); ++i ) {
                 string _format;
-                for ( int j = 0; j < com_count; ++j ) {
+                for ( size_t j = 0; j < com_count; ++j ) {
                     if ( _format.size() == 0 ) {
                         _format = _coms[i + j];
                     } else {
@@ -1142,6 +1144,9 @@ int main( int argc, char *argv[] ) {
         }
     }
 
+    if ( _reload_config ) {
+        // To do:...
+    }
     // Create the default filter
     _config_default_filter["name"] = "default";
     _config_default_filter["mode"] = "redirect";

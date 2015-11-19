@@ -43,8 +43,8 @@ namespace cpputility {
         
         unsigned char *outputBytes = (unsigned char *)ostr;
         
-        long long i;
-        long long outputLength = 0;
+        unsigned long long i;
+        unsigned long long outputLength = 0;
         for (i = 0; i < inputLength - 2; i += 3)
         {
             outputBytes[outputLength++] = lookup[(inputBytes[i] & 0xFC) >> 2];
