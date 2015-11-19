@@ -862,6 +862,7 @@ void clnd_network_manager( ) {
                                         _f->name.c_str(), _f->parent.ip.ip.c_str(), _f->parent.port);
                                     continue;
                                 }
+                                _ruso.set_reusable(true);
                                 _ruso.write_data(_incoming_buf);
                                 sl_poller::server().monitor_socket(_ruso.m_socket, true);
                                 clnd_udp_value _udp_info = make_pair(_uso.m_socket, _uso.m_sock_addr);
@@ -875,6 +876,7 @@ void clnd_network_manager( ) {
                                         _f->name.c_str(), _f->parent.ip.ip.c_str(), _f->parent.port);
                                     continue;
                                 }
+                                _rtso.set_reusable(true);
                                 string _rbuf;
                                 dns_generate_tcp_redirect_package(_incoming_buf, _rbuf);
                                 _rtso.write_data(_rbuf);
@@ -898,6 +900,7 @@ void clnd_network_manager( ) {
                                     _f->name.c_str(), _f->parent.ip.ip.c_str(), _f->parent.port);
                                 continue;
                             }
+                            _rtso.set_reusable(true);
                             string _rbuf;
                             dns_generate_tcp_redirect_package(_incoming_buf, _rbuf);
                             _rtso.write_data(_rbuf);
@@ -935,6 +938,7 @@ void clnd_network_manager( ) {
                         // then remove current so from the cache map
                         _udp_proxy_redirect_cache.erase(_event.so);
                         _tso.close();
+                        //_ruso.close();
                     } else if ( _tcp_redirect_cache.find(_event.so) != end(_tcp_redirect_cache) ) {
                         cp_log(log_debug, "get response from %s:%u for direct redirect.",
                             _pi.ip.ip.c_str(), _pi.port);
@@ -947,6 +951,7 @@ void clnd_network_manager( ) {
                         // remove current so from the cache map
                         _tcp_redirect_cache.erase(_event.so);
                         _tso.close();
+                        _rtso.close();
                     } else {
                         // This is a new incoming tcp request
                         cp_log(log_info, "get new incoming tcp request from %s:%u.",
@@ -999,6 +1004,7 @@ void clnd_network_manager( ) {
                                 _tso.close();
                                 continue;
                             }
+                            _rtso.set_reusable(true);
                             _rtso.write_data(_incoming_buf);
                             sl_poller::server().monitor_socket(_rtso.m_socket, true);
                             _tcp_redirect_cache[_rtso.m_socket] = _tso.m_socket;
@@ -1017,6 +1023,7 @@ void clnd_network_manager( ) {
                                 _tso.close();
                                 continue;
                             }
+                            _rtso.set_reusable(true);
                             _rtso.write_data(_incoming_buf);
                             sl_poller::server().monitor_socket(_rtso.m_socket, true);
                             _tcp_redirect_cache[_rtso.m_socket] = _tso.m_socket;
