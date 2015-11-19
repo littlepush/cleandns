@@ -1097,13 +1097,9 @@ void clnd_network_manager( ) {
             if ( (_now - _alive_it->second) < 5 ) continue;
             _timeout_sos.push_back(_alive_it->first);
 
-            uint32_t _ipaddr, _port;
-            network_peer_info_from_socket(_alive_it->first, _ipaddr, _port);
-            clnd_peerinfo _pi(_ipaddr, _port);
             uint32_t _lport;
             network_sock_info_from_socket(_alive_it->first, _lport);
-            cp_log(log_warning, "find a timedout socket 127.0.0.1:%u -> %s:%u",
-                _lport, _pi.ip.ip.c_str(), _pi.port);
+            cp_log(log_warning, "find a timedout socket on local 127.0.0.1:%u", _lport);
 
             auto _urit = _udp_redirect_cache.find(_alive_it->first);
             if ( _urit != end(_udp_redirect_cache) ) {
