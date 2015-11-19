@@ -224,6 +224,9 @@ void network_int_to_ipaddress( const uint32_t ipaddr, string &ip );
 // Get peer ipaddress and port from a specified socket handler.
 void network_peer_info_from_socket( const SOCKET_T hSo, uint32_t &ipaddr, uint32_t &port );
 
+// Get current socket's port info
+void network_sock_info_from_socket( const SOCKET_T hSo, uint32_t &port );
+
 // Check the specified socket's status according to the option.
 SOCKETSTATUE socket_check_status( SOCKET_T hSo, SOCKETOPT option = SO_CHECK_READ, uint32_t waitTime = 0 );
 

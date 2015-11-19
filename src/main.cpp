@@ -882,11 +882,10 @@ void clnd_network_manager( ) {
                                 }
                                 _ruso.set_reusable(true);
                                 // Dump debug info
-                                uint32_t _ruip, _ruport;
-                                network_peer_info_from_socket(_ruso.m_socket, _ruip, _ruport);
-                                clnd_ip _rip(_ruip);
-                                cp_log(log_debug, "redirect domain: %s with local udp connection: %s:%u",
-                                    _domain.c_str(), _rip.ip.c_str(), _ruport);
+                                uint32_t _ruport;
+                                network_sock_info_from_socket(_ruso.m_socket, _ruport);
+                                cp_log(log_debug, "redirect domain: %s with local udp connection: 127.0.0.1:%u",
+                                    _domain.c_str(), _ruport);
 
                                 _ruso.write_data(_incoming_buf);
                                 sl_poller::server().monitor_socket(_ruso.m_socket, true);
@@ -904,11 +903,10 @@ void clnd_network_manager( ) {
                                 _rtso.set_reusable(true);
 
                                 // Dump debug info
-                                uint32_t _ruip, _ruport;
-                                network_peer_info_from_socket(_rtso.m_socket, _ruip, _ruport);
-                                clnd_ip _rip(_ruip);
-                                cp_log(log_debug, "redirect domain: %s with local tcp connection: %s:%u",
-                                    _domain.c_str(), _rip.ip.c_str(), _ruport);
+                                uint32_t _ruport;
+                                network_sock_info_from_socket(_rtso.m_socket, _ruport);
+                                cp_log(log_debug, "redirect domain: %s with local tcp connection: 127.0.0.1:%u",
+                                    _domain.c_str(), _ruport);
 
                                 string _rbuf;
                                 dns_generate_tcp_redirect_package(_incoming_buf, _rbuf);
@@ -936,11 +934,10 @@ void clnd_network_manager( ) {
                             _rtso.set_reusable(true);
 
                             // Dump debug info
-                            uint32_t _ruip, _ruport;
-                            network_peer_info_from_socket(_rtso.m_socket, _ruip, _ruport);
-                            clnd_ip _rip(_ruip);
-                            cp_log(log_debug, "redirect domain: %s with local tcp connection: %s:%u",
-                                _domain.c_str(), _rip.ip.c_str(), _ruport);
+                            uint32_t _ruport;
+                            network_sock_info_from_socket(_rtso.m_socket, _ruport);
+                            cp_log(log_debug, "redirect domain: %s with local tcp connection: 127.0.0.1:%u",
+                                _domain.c_str(), _ruport);
 
                             string _rbuf;
                             dns_generate_tcp_redirect_package(_incoming_buf, _rbuf);

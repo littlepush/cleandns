@@ -106,6 +106,20 @@ void network_peer_info_from_socket( const SOCKET_T hSo, u_int32_t &ipaddr, u_int
     }
 }
 
+// Get current socket's port info
+void network_sock_info_from_socket( const SOCKET_T hSo, uint32_t &port )
+{
+    if ( SOCKET_NOT_VALIDATE(hSo) ) return;
+
+    struct sockaddr_in _addr;
+    socklen_t _addrLen = sizeof(_addr);
+    memset( &_addr, 0, sizeof(_addr) );
+    if ( 0 == getsockname( hSo, (struct sockaddr *)&_addr, &_addrLen ) )
+    {
+        port = ntohs(_addr.sin_port);
+    }
+}
+
 // Check the specified socket's status according to the option.
 SOCKETSTATUE socket_check_status( SOCKET_T hSo, SOCKETOPT option, u_int32_t waitTime )
 {
