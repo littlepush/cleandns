@@ -179,6 +179,11 @@ typedef struct tag_clnd_peerinfo {
     }
 
     operator bool() const { return port > 0 && port <= 65535; }
+    operator const string () const { 
+        ostringstream _oss;
+        _oss << ip << ":" << port;
+        return _oss.str();
+    }
 } clnd_peerinfo;
 
 ostream & operator << (ostream &os, const clnd_peerinfo &peer) {
@@ -679,13 +684,13 @@ lp_clnd_filter clnd_search_match_filter(const string &domain)
     return _g_default_filter;
 }
 
-void clnd_dump_a_records(const char *pkg, unsigned int len) {
+void clnd_dump_a_records(const char *pkg, unsigned int len, const string &rpeer) {
     string _qdomain;
     vector<uint32_t> _a_records;
     dns_get_a_records(pkg , len, _qdomain, _a_records);
     for ( auto _a_ip : _a_records ) {
         clnd_ip _ip(_a_ip);
-        cp_log(log_info, "domain: %s, A: %s", _qdomain.c_str(), _ip.ip.c_str());
+        cp_log(log_info, "R:[%s] D:[%s], A:[%s]", rpeer.c_str(), _qdomain.c_str(), _ip.ip.c_str());
     }
 }
 
@@ -790,7 +795,7 @@ void clnd_network_manager( ) {
                         sl_udpsocket _uso(_udp_info.first, _udp_info.second);
                         _uso.write_data(_incoming_buf);
 
-                        clnd_dump_a_records(_incoming_buf.c_str(), _incoming_buf.size());
+                        clnd_dump_a_records(_incoming_buf.c_str(), _incoming_buf.size(), _pi);
 
                         _udp_redirect_cache.erase(_event.so);
                     } else {
@@ -922,7 +927,7 @@ void clnd_network_manager( ) {
                         string _rbuf;
                         dns_generate_udp_response_package_from_tcp(_incoming_buf, _rbuf);
 
-                        clnd_dump_a_records(_rbuf.c_str(), _rbuf.size());
+                        clnd_dump_a_records(_rbuf.c_str(), _rbuf.size(), _pi);
                         _ruso.write_data(_rbuf);
                         // then remove current so from the cache map
                         _udp_proxy_redirect_cache.erase(_event.so);
@@ -931,7 +936,7 @@ void clnd_network_manager( ) {
                             _pi.ip.ip.c_str(), _pi.port);
                         // This is a tcp redirect(also can be a sock5 redirect)
                         // get the response then write to log
-                        clnd_dump_a_records(_incoming_buf.c_str() + 2, _incoming_buf.size() - 2);
+                        clnd_dump_a_records(_incoming_buf.c_str() + 2, _incoming_buf.size() - 2, _pi);
                         // send back to the origin tcp socket
                         sl_tcpsocket _rtso(_tcp_redirect_cache[_event.so]);
                         _rtso.write_data(_incoming_buf);
