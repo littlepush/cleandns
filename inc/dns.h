@@ -53,6 +53,7 @@
 #include <stdio.h>
 #include <memory.h>
 #include <stdlib.h>
+#include "socketlite.h"
 
 using namespace std;
 
