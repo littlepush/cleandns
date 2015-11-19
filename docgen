@@ -28,7 +28,13 @@ DocHeaderFile=./inc/doc_header_auto_generate.h
 
 echo "#pragma once" > ${DocHeaderFile}
 
+BASE64_CMD="base64"
+IS_LINUX=$(base64 --help | grep "\-w" | wc -l)
+if [ ${IS_LINUX} -eq 1 ]; then
+    BASE64_CMD="base64 -w 0"
+fi
+
 for doc in $(ls ./doc); do
     def_name=CLEANDNS_DOC_$(echo ${doc} | awk '{print toupper($0)}')
-    echo "#define ${def_name} \"$(base64 doc/$doc)\"" >> ${DocHeaderFile}
+    echo "#define ${def_name} \"$(${BASE64_CMD} doc/$doc)\"" >> ${DocHeaderFile}
 done
