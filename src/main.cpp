@@ -745,9 +745,17 @@ void clnd_network_manager( ) {
                         _udp_proxy_redirect_cache.erase(_event.so);
                         cp_log(log_warning, "error on udp proxy redirected tcp socket(%d): %s:%u", 
                             _event.so, _ip.ip.c_str(), _port);
+                        // Close the tcp socket
+                        close(_event.so);
                     } else if ( _tcp_redirect_cache.find(_event.so) != end(_tcp_redirect_cache) ) {
+                        // Both close these two socket
+                        close(_tcp_redirect_cache[_event.so]);
+                        close(_event.so);
                         _tcp_redirect_cache.erase(_event.so);
                         cp_log(log_warning, "error on tcp redirected tcp socket(%d): %s:%u", 
+                            _event.so, _ip.ip.c_str(), _port);
+                    } else {
+                        cp_log(log_error, "unknow error on tcp socket(%d): %s:%u",
                             _event.so, _ip.ip.c_str(), _port);
                     }
                 } else {
@@ -762,8 +770,9 @@ void clnd_network_manager( ) {
                         cp_log(log_warning, "error on udp redirected response socket(%d): %s:%u",
                             _event.so, _pi.ip.ip.c_str(), _pi.port);
                         _udp_redirect_cache.erase(_it);
+                        close(_event.so);
                     } else {
-                        cp_log(log_warning, "error on udp socket");
+                        cp_log(log_error, "error on udp socket");
                     }
                 }
             } else if ( _event.event == SL_EVENT_ACCEPT ) {
@@ -783,6 +792,15 @@ void clnd_network_manager( ) {
                         _pi.ip = _sock_info.sin_addr.s_addr;
                         _pi.port = _sock_info.sin_port;
 
+                        clnd_udp_value _udp_info = _rudp_info.second;
+                        sl_udpsocket _uso(_udp_info.first, _udp_info.second);
+                        clnd_peerinfo _opi(_udp_info.second.sin_addr.s_addr, _udp_info.second.sin_port);
+
+                        cp_log(log_info, "get response udp package from %s:%u for origin request: %s:%u",
+                            _pi.ip.ip.c_str(), _pi.port, 
+                            _opi.ip.ip.c_str(), _opi.port
+                            );
+
                         string _incoming_buf;
                         _ruso.recv(_incoming_buf);
 
@@ -793,8 +811,6 @@ void clnd_network_manager( ) {
                         // Response from parent
                         // Get response data, then write to log
                         // redirect response
-                        clnd_udp_value _udp_info = _rudp_info.second;
-                        sl_udpsocket _uso(_udp_info.first, _udp_info.second);
                         _uso.write_data(_incoming_buf);
 
                         clnd_dump_a_records(_incoming_buf.c_str(), _incoming_buf.size(), _pi);
@@ -822,6 +838,8 @@ void clnd_network_manager( ) {
                         lp_clnd_filter _f = clnd_search_match_filter(_domain);
                         // if is local filter, generate a response package
                         if ( _f->mode == clnd_filter_mode_local ) {
+                            cp_log(log_info, "the domain %s match a local zone: %s", 
+                                _domain.c_str(), _f->name.c_str());
                             shared_ptr<clnd_filter_local> _lf = dynamic_pointer_cast<clnd_filter_local>(_f);
                             vector<string> _local_result;
                             clnd_local_result_type _type;
@@ -863,6 +881,13 @@ void clnd_network_manager( ) {
                                     continue;
                                 }
                                 _ruso.set_reusable(true);
+                                // Dump debug info
+                                uint32_t _ruip, _ruport;
+                                network_peer_info_from_socket(_ruso.m_socket, _ruip, _ruport);
+                                clnd_ip _rip(_ruip);
+                                cp_log(log_debug, "redirect domain: %s with local udp connection: %s:%u",
+                                    _domain.c_str(), _rip.ip.c_str(), _ruport);
+
                                 _ruso.write_data(_incoming_buf);
                                 sl_poller::server().monitor_socket(_ruso.m_socket, true);
                                 clnd_udp_value _udp_info = make_pair(_uso.m_socket, _uso.m_sock_addr);
@@ -877,6 +902,14 @@ void clnd_network_manager( ) {
                                     continue;
                                 }
                                 _rtso.set_reusable(true);
+
+                                // Dump debug info
+                                uint32_t _ruip, _ruport;
+                                network_peer_info_from_socket(_rtso.m_socket, _ruip, _ruport);
+                                clnd_ip _rip(_ruip);
+                                cp_log(log_debug, "redirect domain: %s with local tcp connection: %s:%u",
+                                    _domain.c_str(), _rip.ip.c_str(), _ruport);
+
                                 string _rbuf;
                                 dns_generate_tcp_redirect_package(_incoming_buf, _rbuf);
                                 _rtso.write_data(_rbuf);
@@ -901,6 +934,14 @@ void clnd_network_manager( ) {
                                 continue;
                             }
                             _rtso.set_reusable(true);
+
+                            // Dump debug info
+                            uint32_t _ruip, _ruport;
+                            network_peer_info_from_socket(_rtso.m_socket, _ruip, _ruport);
+                            clnd_ip _rip(_ruip);
+                            cp_log(log_debug, "redirect domain: %s with local tcp connection: %s:%u",
+                                _domain.c_str(), _rip.ip.c_str(), _ruport);
+
                             string _rbuf;
                             dns_generate_tcp_redirect_package(_incoming_buf, _rbuf);
                             _rtso.write_data(_rbuf);
