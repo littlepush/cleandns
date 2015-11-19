@@ -800,6 +800,7 @@ void clnd_network_manager( ) {
                         clnd_dump_a_records(_incoming_buf.c_str(), _incoming_buf.size(), _pi);
 
                         _udp_redirect_cache.erase(_event.so);
+                        _ruso.close();
                     } else {
                         cp_log(log_info, "get new incoming udp request from %s:%u.",
                             _pi.ip.ip.c_str(), _pi.port);
@@ -933,6 +934,7 @@ void clnd_network_manager( ) {
                         _ruso.write_data(_rbuf);
                         // then remove current so from the cache map
                         _udp_proxy_redirect_cache.erase(_event.so);
+                        _tso.close();
                     } else if ( _tcp_redirect_cache.find(_event.so) != end(_tcp_redirect_cache) ) {
                         cp_log(log_debug, "get response from %s:%u for direct redirect.",
                             _pi.ip.ip.c_str(), _pi.port);
@@ -944,6 +946,7 @@ void clnd_network_manager( ) {
                         _rtso.write_data(_incoming_buf);
                         // remove current so from the cache map
                         _tcp_redirect_cache.erase(_event.so);
+                        _tso.close();
                     } else {
                         // This is a new incoming tcp request
                         cp_log(log_info, "get new incoming tcp request from %s:%u.",
