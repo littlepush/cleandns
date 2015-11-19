@@ -85,7 +85,7 @@ namespace cpputility {
 				// To file
 				do {
 					g_logfp = fopen(g_logpath.c_str(), "a+");
-				} while ( g_logfp == NULL );
+				} while ( g_logfp == NULL && cp_log_status() );
 				fprintf(g_logfp, "%s\n", _logitem.second.c_str());
 				fclose(g_logfp);
 				g_logfp = NULL;
