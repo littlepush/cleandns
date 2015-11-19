@@ -947,7 +947,6 @@ SO_READ_STATUE sl_udpsocket::recv(string &buffer, unsigned int max_buffer_len)
             return SO_READ_CLOSE;
         } else {
             buffer.resize(_retCode);
-            cout << "recv: " << _retCode << "bytes" << endl;
             return SO_READ_DONE;
         }
     } while ( true );
