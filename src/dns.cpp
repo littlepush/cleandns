@@ -462,6 +462,13 @@ void dns_get_a_records( const char *pkg, unsigned int len, string &qdomain, vect
     }
 }
 
+// Check if is a query request
+bool dns_is_query(const char *pkg, unsigned int len)
+{
+    clnd_dns_package *_pheader = (clnd_dns_package *)pkg;
+    return _pheader->get_is_query_request();
+}
+
 // cleandns.dns.cpp
 /*
  Push Chen.

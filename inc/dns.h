@@ -183,6 +183,9 @@ void dns_gnerate_cname_records_resp( const char *pkg, unsigned int len, vector<s
 // Get all available A records from a package
 void dns_get_a_records( const char *pkg, unsigned int len, string &qdomain, vector<uint32_t> &a_records );
 
+// Check if is a query request
+bool dns_is_query(const char *pkg, unsigned int len);
+
 #endif
 
 /*

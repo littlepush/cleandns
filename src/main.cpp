@@ -729,11 +729,13 @@ void clnd_network_manager( ) {
     map <SOCKET_T, clnd_rudp_value> _udp_redirect_cache;
     map <SOCKET_T, clnd_udp_value> _udp_proxy_redirect_cache;
     map <SOCKET_T, SOCKET_T> _tcp_redirect_cache;
+    map <SOCKET_T, time_t> _alive_cache;
 
     // Main run loop
     while ( this_thread_is_running() ) {
         _event_list.clear();
         sl_poller::server().fetch_events(_event_list);
+        time_t _now = time(NULL);
         for ( auto &_event : _event_list ) {
             if ( _event.event == SL_EVENT_FAILED ) {
                 // On error, remove all cache
@@ -774,6 +776,11 @@ void clnd_network_manager( ) {
                     } else {
                         cp_log(log_error, "error on udp socket");
                     }
+                }
+
+                // Remove the cache.
+                if ( _alive_cache.find(_event.so) != end(_alive_cache) ) {
+                    _alive_cache.erase(_event.so);
                 }
             } else if ( _event.event == SL_EVENT_ACCEPT ) {
                 // New incoming, which will always be TCP
@@ -816,6 +823,7 @@ void clnd_network_manager( ) {
                         clnd_dump_a_records(_incoming_buf.c_str(), _incoming_buf.size(), _pi);
 
                         _udp_redirect_cache.erase(_event.so);
+                        _alive_cache.erase(_event.so);
                         _ruso.close();
                     } else {
                         cp_log(log_info, "get new incoming udp request from %s:%u.",
@@ -829,6 +837,13 @@ void clnd_network_manager( ) {
                         cout << "UDP Incoming: " << endl;
                         #endif
                         DUMP_HEX(_incoming_buf);
+
+                        if ( dns_is_query(_incoming_buf.c_str(), _incoming_buf.size()) == false ) {
+                            cp_log(log_error, "the incoming (%s:%u) package is not a query request",
+                                _pi.ip.ip.c_str(), _pi.port);
+                            if ( _event.so != _udpso.m_socket ) close(_event.so);
+                            continue;
+                        }
 
                         // Get domain
                         string _domain;
@@ -891,6 +906,7 @@ void clnd_network_manager( ) {
                                 sl_poller::server().monitor_socket(_ruso.m_socket, true);
                                 clnd_udp_value _udp_info = make_pair(_uso.m_socket, _uso.m_sock_addr);
                                 _udp_redirect_cache[_ruso.m_socket] = make_pair(_ruso.m_sock_addr, _udp_info);
+                                _alive_cache[_ruso.m_socket] = _now;
                             } else {
                                 cp_log(log_debug, "redirect incoming(%s:%u) via tcp for domain: %s",
                                     _pi.ip.ip.c_str(), _pi.port, _domain.c_str());
@@ -913,6 +929,7 @@ void clnd_network_manager( ) {
                                 _rtso.write_data(_rbuf);
                                 sl_poller::server().monitor_socket(_rtso.m_socket, true);
                                 _udp_proxy_redirect_cache[_rtso.m_socket] = make_pair(_uso.m_socket, _uso.m_sock_addr);
+                                _alive_cache[_rtso.m_socket] = _now;
                             }
                         }
                         // else, must be a proxy redirect, create a tcp redirect package, 
@@ -944,6 +961,7 @@ void clnd_network_manager( ) {
                             _rtso.write_data(_rbuf);
                             sl_poller::server().monitor_socket(_rtso.m_socket, true);
                             _udp_proxy_redirect_cache[_rtso.m_socket] = make_pair(_uso.m_socket, _uso.m_sock_addr);
+                            _alive_cache[_rtso.m_socket] = _now;
                         }
                     }
                 } else {
@@ -975,6 +993,7 @@ void clnd_network_manager( ) {
                         _ruso.write_data(_rbuf);
                         // then remove current so from the cache map
                         _udp_proxy_redirect_cache.erase(_event.so);
+                        _alive_cache.erase(_event.so);
                         _tso.close();
                         //_ruso.close();
                     } else if ( _tcp_redirect_cache.find(_event.so) != end(_tcp_redirect_cache) ) {
@@ -988,6 +1007,7 @@ void clnd_network_manager( ) {
                         _rtso.write_data(_incoming_buf);
                         // remove current so from the cache map
                         _tcp_redirect_cache.erase(_event.so);
+                        _alive_cache.erase(_event.so);
                         _tso.close();
                         _rtso.close();
                     } else {
@@ -1046,6 +1066,7 @@ void clnd_network_manager( ) {
                             _rtso.write_data(_incoming_buf);
                             sl_poller::server().monitor_socket(_rtso.m_socket, true);
                             _tcp_redirect_cache[_rtso.m_socket] = _tso.m_socket;
+                            _alive_cache[_rtso.m_socket] = _now;
                         }
                         // else create a tcp socket via proxy, and send then wait.
                         else {
@@ -1065,10 +1086,38 @@ void clnd_network_manager( ) {
                             _rtso.write_data(_incoming_buf);
                             sl_poller::server().monitor_socket(_rtso.m_socket, true);
                             _tcp_redirect_cache[_rtso.m_socket] = _tso.m_socket;
+                            _alive_cache[_rtso.m_socket] = _now;
                         }
                     }
                 }
             }
+        }
+        list<SOCKET_T> _timeout_sos;
+        for ( auto _alive_it = begin(_alive_cache); _alive_it != end(_alive_cache); ++_alive_it ) {
+            if ( (_now - _alive_it->second) < 5 ) continue;
+            _timeout_sos.push_back(_alive_it->first);
+            auto _urit = _udp_redirect_cache.find(_alive_it->first);
+            if ( _urit != end(_udp_redirect_cache) ) {
+                close(_urit->first);
+                _udp_redirect_cache.erase(_urit);
+                continue;
+            }
+            auto _uprit = _udp_proxy_redirect_cache.find(_alive_it->first);
+            if ( _uprit != end(_udp_proxy_redirect_cache) ) {
+                close(_uprit->first);
+                _udp_proxy_redirect_cache.erase(_uprit);
+                continue;
+            }
+            auto _trit = _tcp_redirect_cache.find(_alive_it->first);
+            if ( _trit != end(_tcp_redirect_cache) ) {
+                close(_trit->first);
+                close(_trit->second);
+                _tcp_redirect_cache.erase(_trit);
+                continue;
+            }
+        }
+        for ( auto _so : _timeout_sos ) {
+            _alive_cache.erase(_so);
         }
     }
 }
