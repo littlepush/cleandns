@@ -1094,7 +1094,7 @@ void clnd_network_manager( ) {
         }
         list<SOCKET_T> _timeout_sos;
         for ( auto _alive_it = begin(_alive_cache); _alive_it != end(_alive_cache); ++_alive_it ) {
-            if ( (_now - _alive_it->second) < 5 ) continue;
+            if ( (_now - _alive_it->second) < 30 ) continue;
             _timeout_sos.push_back(_alive_it->first);
 
             uint32_t _lport;
