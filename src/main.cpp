@@ -768,7 +768,7 @@ void clnd_network_manager( ) {
                         clnd_rudp_value _rudp_info = _it->second;
                         struct sockaddr_in _rudp_addr = _rudp_info.first;
                         _pi.ip = _rudp_addr.sin_addr.s_addr;
-                        _pi.port = _rudp_addr.sin_port;
+                        _pi.port = ntohs(_rudp_addr.sin_port);
                         cp_log(log_warning, "error on udp redirected response socket(%d): %s:%u",
                             _event.so, _pi.ip.ip.c_str(), _pi.port);
                         _udp_redirect_cache.erase(_it);
@@ -789,7 +789,7 @@ void clnd_network_manager( ) {
             } else {
                 // New Data
                 if ( _event.socktype == IPPROTO_UDP ) {
-                    clnd_peerinfo _pi(_event.address.sin_addr.s_addr, _event.address.sin_port);
+                    clnd_peerinfo _pi(_event.address.sin_addr.s_addr, ntohs(_event.address.sin_port));
 
                     // If is response
                     if ( _udp_redirect_cache.find(_event.so) != end(_udp_redirect_cache) ) {
@@ -797,11 +797,11 @@ void clnd_network_manager( ) {
                         sl_udpsocket _ruso(_event.so, _rudp_info.first);
                         struct sockaddr_in _sock_info = _rudp_info.first;
                         _pi.ip = _sock_info.sin_addr.s_addr;
-                        _pi.port = _sock_info.sin_port;
+                        _pi.port = ntohs(_sock_info.sin_port);
 
                         clnd_udp_value _udp_info = _rudp_info.second;
                         sl_udpsocket _uso(_udp_info.first, _udp_info.second);
-                        clnd_peerinfo _opi(_udp_info.second.sin_addr.s_addr, _udp_info.second.sin_port);
+                        clnd_peerinfo _opi(_udp_info.second.sin_addr.s_addr, ntohs(_udp_info.second.sin_port));
 
                         cp_log(log_info, "get response udp package from %s:%u for origin request: %s:%u",
                             _pi.ip.ip.c_str(), _pi.port, 
