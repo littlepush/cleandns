@@ -116,5 +116,5 @@ withpg : PreProcess $(STATIC_LIBS) $(DYNAMIC_LIBS) $(EXECUTABLE) $(TEST_CASE) Af
 	$(CC) $(CXXFLAGS) -c -o $@ $<
 
 cleandns: $(OBJ_FILES)
-	$(CC) -o $@ $^ $(CXXFLAGS)
+	$(CC) -o $@ $^ $(CXXFLAGS) -lresolv
 

@@ -101,16 +101,16 @@ clnd_config_service::clnd_config_service( const Json::Value& config_node ) :
 
 void clnd_config_service::start_log() const {
     // Stop the existed log
-    cp_log_stop();
+    // cp_log_stop();
     // Check system log path
     if ( logpath_ == "syslog" ) {
-        cp_log_start(loglv_);
+        log_arguments::instance().start(loglv_, "cleandns");
     } else if ( logpath_ == "stdout" ) {
-        cp_log_start(stdout, loglv_);
+        log_arguments::instance().start(stdout, loglv_);
     } else if ( logpath_ == "stderr" ) {
-        cp_log_start(stderr, loglv_);
+        log_arguments::instance().start(stderr, loglv_);
     } else {
-        cp_log_start(logpath_, loglv_);
+        log_arguments::instance().start(logpath_, loglv_);
     }
 }
 
@@ -156,7 +156,7 @@ void cleandns_version_info() {
     printf( "Visit <https://github.com/littlepush/cleandns> for more infomation.\n" );
 }
 
-clnd_config_service *_g_service_config = NULL;
+service_t _g_service_config;
 
 /*
  Push Chen.

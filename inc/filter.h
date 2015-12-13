@@ -46,7 +46,6 @@
 #define __CLEAN_DNS_FILTER_H__
 
 #include "socketlite.h"
-#include "string_format.hpp"
 
 #include <list>
 #include <algorithm>

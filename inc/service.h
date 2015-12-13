@@ -45,10 +45,8 @@
 #ifndef __CLEAN_DNS_SERVICE_H__
 #define __CLEAN_DNS_SERVICE_H__
 
-#include "log.h"
 #include "base64.h"
 #include "socketlite.h"
-#include "string_format.hpp"
 #include "filter.h"
 
 #include "json/json.h"
@@ -92,7 +90,11 @@ void cleandns_filterhelp();
 // Output the version info
 void cleandns_version_info();
 
-extern clnd_config_service *_g_service_config;
+typedef shared_ptr<clnd_config_service> service_t;
+extern service_t _g_service_config;
+
+// Load the service config
+bool load_service_config_from_file(const string &config_path);
 
 #endif
 
