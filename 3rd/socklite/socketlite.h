@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc2
+// Current Version: 0.6-rc2-1-ge0987b6
 
 #pragma once
 // inc/thread.hpp
@@ -610,6 +610,8 @@ namespace cpputility {
 #include <vector>
 #include <algorithm>
 #include <memory>
+#include <stdio.h>
+#include <string.h>
 
 using namespace std;
 
