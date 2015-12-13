@@ -410,7 +410,7 @@ int main( int argc, char *argv[] ) {
                 }
             });
         }) ? void() : [](){
-            lerror << "failed to listen on " << _g_service_config->port << lend;
+            lerror << "failed to listen on tcp port: " << _g_service_config->port << lend;
             // Internal method: force to safe exit the app
             __g_thread_mutex().unlock();
         }();
@@ -477,7 +477,11 @@ int main( int argc, char *argv[] ) {
                     sl_socket_close(_st);
                 }();
             }
-        });
+        }) ? void() : [](){
+            lerror << "failed to listen on udp port: " << _g_service_config->port << lend;
+            // Internal method: force to safe exit the app
+            __g_thread_mutex().unlock();
+        }();
     }
 
     return 0;
