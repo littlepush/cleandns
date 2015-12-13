@@ -161,7 +161,10 @@ void clnd_udp_redirect_to_tcp(sl_event e, sl_event re, const string & incoming_p
         sl_socket_close(re.so);
         return;
     }
-    sl_tcp_socket_send(re.so, incoming_pkg);
+    ldebug << "connected to " << f->parent << " via socks5 proxy " << f->socks5 << lend;
+    string _tincoming_pkg;
+    dns_generate_tcp_redirect_package(incoming_pkg, _tincoming_pkg);
+    sl_tcp_socket_send(re.so, _tincoming_pkg);
     sl_tcp_socket_monitor(re.so, [e, f](sl_event re){
         if ( re.event == SL_EVENT_FAILED ) {
             lerror << "failed to get response from " << f->parent << " for filter " << f->name << lend;
