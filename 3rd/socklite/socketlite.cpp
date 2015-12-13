@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc2-1-ge0987b6
+// Current Version: 0.6-rc2-2-g33f6388
 
 #include "socketlite.h"
 // src/dns.cpp
@@ -1060,7 +1060,7 @@ bool sl_poller::monitor_socket( SOCKET_T so, bool oneshot, SL_EVENT_ID eid, bool
 		if ( isreset ) _op = EPOLL_CTL_MOD;
 	}
 	if ( -1 == epoll_ctl( m_fd, _op, so, &_ee ) ) {
-		lerror << "failed to monitor the socket " << so << ": " << :strerror(errno) << lend;
+		lerror << "failed to monitor the socket " << so << ": " << ::strerror(errno) << lend;
 		return false;
 	}
 #elif SL_TARGET_MAC
@@ -1556,6 +1556,11 @@ void sl_socks5_did_connect_to_peer(SOCKET_T so, uint32_t addr, uint16_t port) {
 
 // src/raw.cpp
 #include <errno.h>
+    
+#if SL_TARGET_LINUX
+#include <limits.h>
+#include <linux/netfilter_ipv4.h>
+#endif
 
 void sl_socket_close(SOCKET_T so)
 {

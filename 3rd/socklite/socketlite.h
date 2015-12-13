@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc2-1-ge0987b6
+// Current Version: 0.6-rc2-2-g33f6388
 
 #pragma once
 // inc/thread.hpp
