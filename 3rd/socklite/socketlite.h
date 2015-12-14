@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc2-4-gf03439d
+// Current Version: 0.6-rc2-5-g3ac285e
 
 #pragma once
 // inc/thread.hpp
@@ -1285,8 +1285,8 @@ public:
 	~sl_poller();
         
 	// Bind the server side socket
-	void bind_tcp_server( SOCKET_T so );
-	void bind_udp_server( SOCKET_T so );
+	bool bind_tcp_server( SOCKET_T so );
+	bool bind_udp_server( SOCKET_T so );
 
 	// Try to fetch new events(Only return SL_EVENT_DEFAULT)
 	size_t fetch_events( earray &events,  unsigned int timedout = 1000 );
