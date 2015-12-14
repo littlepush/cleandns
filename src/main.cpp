@@ -391,10 +391,7 @@ int main( int argc, char *argv[] ) {
     // Sort the filter
     clnd_global_sort_filter();
 
-    signal_agent _sa([&](){
-        remove(_g_service_config->pidfile.c_str());
-        linfo << "cleandns terminated" << lend;
-    });
+    bool _system_error = false;
 
     if ( _g_service_config->service_protocol & clnd_protocol_tcp ) {
         SOCKET_T _so = sl_tcp_socket_init();
@@ -448,10 +445,10 @@ int main( int argc, char *argv[] ) {
                     }();
                 }
             }, true);
-        }) ? void() : [](){
+        }) ? void() : [&](){
             lerror << "failed to listen on tcp port: " << _g_service_config->port << lend;
             // Internal method: force to safe exit the app
-            __g_thread_mutex().unlock();
+            _system_error = true;
         }();
     }
 
@@ -517,10 +514,10 @@ int main( int argc, char *argv[] ) {
                     sl_socket_close(_st);
                 }();
             }
-        }) ? void() : [](){
+        }) ? void() : [&](){
             lerror << "failed to listen on udp port: " << _g_service_config->port << lend;
             // Internal method: force to safe exit the app
-            __g_thread_mutex().unlock();
+            _system_error = true;
         }();
     }
 
@@ -590,9 +587,9 @@ int main( int argc, char *argv[] ) {
                 lerror << "failed to monitor on the new incoming socket: " << e.so << lend;
                 sl_socket_close(e.so);
             }
-        }) ? void() : [](){
+        }) ? void() : [&](){
             lerror << "failed to listen on tcp control port: " << _g_service_config->control_port << lend;
-            __g_thread_mutex().unlock();
+            _system_error = true;
         }();
     } while(false);
 
@@ -648,10 +645,18 @@ int main( int argc, char *argv[] ) {
             }
         })) {
             lerror << "failed to listen on tcp gateway port: " << _g_service_config->gateway_port << lend;
-            __g_thread_mutex().unlock();
+            _system_error = true;
         }
     }
 
+    if ( !_system_error ) {
+        signal_agent _sa([&](){
+            remove(_g_service_config->pidfile.c_str());
+            linfo << "cleandns terminated" << lend;
+        });
+    } else {
+        return 1;
+    }
     return 0;
 }
 
