@@ -102,39 +102,36 @@ int main(int argc, char * argv[])
             lerror << "failed to connect to the server" << lend;
             usleep(20);
             __g_thread_mutex().unlock();
-            exit(3);
+            return;
         }
         if ( !sl_tcp_socket_send(e.so, _oss.str()) ) {
             usleep(20);
             __g_thread_mutex().unlock();
-            exit(3);
+            return;
         }
         if ( !sl_tcp_socket_monitor(e.so, [](sl_event e){
             if ( e.event == SL_EVENT_FAILED ) {
                 usleep(20);
                 __g_thread_mutex().unlock();
-                exit(3);
+                return;
             }
             string _resp;
             if ( !sl_tcp_socket_read(e.so, _resp) ) {
                 usleep(20);
                 __g_thread_mutex().unlock();
-                exit(3);
+                return;
             }
-            int _retval = 0;
             if ( _resp == "{\"errno\":0}" ) {
                 lnotice << "success to update the filter" << lend;
             } else {
                 lerror << _resp << lend;
-                _retval = 3;
             }
             usleep(20);
             __g_thread_mutex().unlock();
-            exit(_retval);
         })) {
             usleep(20);
             __g_thread_mutex().unlock();
-            exit(3);
+            return;
         }
     })) {
         usleep(20);
