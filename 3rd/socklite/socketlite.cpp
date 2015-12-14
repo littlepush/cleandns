@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc2-3-g4ef7e1d
+// Current Version: 0.6-rc2-4-gf03439d
 
 #include "socketlite.h"
 // src/dns.cpp
@@ -905,14 +905,21 @@ void sl_poller::bind_tcp_server( SOCKET_T so ) {
 }
 
 void sl_poller::bind_udp_server( SOCKET_T so ) {
+#if SL_TARGET_LINUX
+	auto _uit = m_udp_svr_map.find(so);
+	bool _is_new_bind = (_uit == end(m_udp_svr_map));
+#endif
+	// Reset the flag
 	m_udp_svr_map[so] = true;
-	unsigned long _u = 1;
-	SL_NETWORK_IOCTL_CALL(so, FIONBIO, &_u);
 #if SL_TARGET_LINUX
 	struct epoll_event _e;
 	_e.data.fd = so;
 	_e.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
-	epoll_ctl( m_fd, EPOLL_CTL_ADD, so, &_e );
+	if ( _is_new_bind ) {
+		epoll_ctl( m_fd, EPOLL_CTL_ADD, so, &_e );
+	} else {
+		epoll_ctl( m_fd, EPOLL_CTL_MOD, so, &_e );
+	}
 #elif SL_TARGET_MAC
 	struct kevent _e;
 	EV_SET(&_e, so, EVFILT_READ, EV_ADD | EV_ONESHOT, 0, 0, NULL);
