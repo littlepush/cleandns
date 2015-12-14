@@ -495,6 +495,72 @@ int main( int argc, char *argv[] ) {
         }();
     }
 
+    do {
+        SOCKET_T _so = sl_tcp_socket_init();
+        sl_tcp_socket_listen(_so, sl_peerinfo(INADDR_ANY, _g_service_config->control_port), [&](sl_event e) {
+            if ( !sl_tcp_socket_monitor(e.so, [](sl_event e) {
+                if ( e.event == SL_EVENT_FAILED ) {
+                    sl_socket_close(e.so);
+                    return;
+                }
+                string _req;
+                if ( !sl_tcp_socket_read(e.so, _req) ) {
+                    sl_socket_close(e.so);
+                    return;
+                }
+                Json::Value _cmd_node;
+                Json::Reader _cmd_reader;
+                if ( !_cmd_reader.parse(_req, _cmd_node, false) ) {
+                    lerror << "the request is not even a json object" << lend;
+                    sl_socket_close(e.so);
+                    return;
+                }
+
+                string _cmd = check_key_with_default(_cmd_node, "command", "").asString();
+                if ( _cmd.size() == 0 ) {
+                    lerror << "the request is not a validate control request" << lend;
+                    sl_socket_close(e.so);
+                    return;
+                }
+                if ( _cmd == "add_filter" ) {
+                    string _filter, _domain_rule;
+                    check_key_with_default(_cmd_node, "filter", "default").asString();
+                    check_key_with_default(_cmd_node, "rule", "localhost").asString();
+
+                    if ( _filter == "default" || _domain_rule == "localhost" ) {
+                        lerror << "invalidate command for add_filter" << lend;
+                        sl_socket_close(e.so);
+                        return;
+                    }
+
+                    lp_clnd_filter _f = clnd_find_filter_by_name(_filter);
+                    if ( !_f ) {
+                        lerror << "no such filter in the list" << lend;
+                        sl_tcp_socket_send(e.so, "{\"errno\": 1,\"errmsg\":\"such filter in the list\"}");
+                    } else if ( _f->mode != clnd_filter_mode_redirect ) {
+                        ostringstream _oss;
+                        _oss << "filter: " << _f->name << " is not a redirect filter, cannot add rule";
+                        lerror << _oss.str() << lend;
+                        ostringstream _msg;
+                        _msg << "{\"errno\": 2,\"errmsg\":\"" << _oss.str() << "\"}";
+                        sl_tcp_socket_send(e.so, _msg.str());
+                    }else {
+                        shared_ptr<clnd_filter_redirect> _rf = dynamic_pointer_cast<clnd_filter_redirect>(_f);
+                        _rf->add_rule(_domain_rule);
+                        sl_tcp_socket_send(e.so, "{\"errno\":0}");
+                    }
+                }
+                sl_socket_close(e.so);
+            }) ) {
+                lerror << "failed to monitor on the new incoming socket: " << e.so << lend;
+                sl_socket_close(e.so);
+            }
+        }) ? void() : [](){
+            lerror << "failed to listen on tcp control port: " << _g_service_config->control_port << lend;
+            __g_thread_mutex().unlock();
+        }();
+    } while(false);
+
     return 0;
 }
 

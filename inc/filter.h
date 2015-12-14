@@ -145,6 +145,7 @@ public:
     clnd_filter_redirect(const Json::Value &config_node, clnd_filter_mode md);
     virtual void output_detail_info(ostream &os) const;
     virtual bool is_match_filter(const string &query_domain) const;
+    void add_rule(const string& domain_rule);
 };
 
 typedef shared_ptr<clnd_filter> lp_clnd_filter;
@@ -160,6 +161,9 @@ void clnd_global_sort_filter();
 
 // Search first match fitler or return the default one
 lp_clnd_filter clnd_search_match_filter(const string &domain);
+
+// Find a filter by its name, if no such filter, then return NULL
+lp_clnd_filter clnd_find_filter_by_name(const string& filter_name);
 
 #endif
 

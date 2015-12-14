@@ -76,7 +76,9 @@ clnd_config_service::clnd_config_service( ) :
     logpath(logpath_),
     loglv(loglv_),
     daemon(daemon_),
-    pidfile(pidfile_){ /* nothing */ }
+    pidfile(pidfile_), 
+    control_port(control_port_)
+    { /* nothing */ }
 clnd_config_service::~clnd_config_service() { /* nothing */ }
 
 clnd_config_service::clnd_config_service( const Json::Value& config_node ) :
@@ -85,7 +87,8 @@ clnd_config_service::clnd_config_service( const Json::Value& config_node ) :
     logpath(logpath_),
     loglv(loglv_),
     daemon(daemon_),
-    pidfile(pidfile_) 
+    pidfile(pidfile_),
+    control_port(control_port_)
 {
     // Service
     service_protocol_ = clnd_protocol_from_string(
@@ -97,6 +100,7 @@ clnd_config_service::clnd_config_service( const Json::Value& config_node ) :
         );
     daemon_ = check_key_with_default(config_node, "daemon", true).asBool();
     pidfile_ = check_key_with_default(config_node, "pidfile", "/var/run/cleandns/pid").asString();
+    control_port_ = check_key_with_default(config_node, "control_port", 1053).asUInt();
 }
 
 void clnd_config_service::start_log() const {

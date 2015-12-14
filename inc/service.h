@@ -63,6 +63,7 @@ protected:
     cp_log_level            loglv_;
     bool                    daemon_;
     string                  pidfile_;
+    uint16_t                control_port_;
 
     cp_log_level _loglv_from_string(const string& loglv_string);
 public:
@@ -74,6 +75,7 @@ public:
     const cp_log_level &    loglv;
     const bool &            daemon;
     const string &          pidfile;
+    const uint16_t &        control_port;
 
     clnd_config_service( );
     virtual ~clnd_config_service();

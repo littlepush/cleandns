@@ -63,9 +63,9 @@ STATIC_LIBS =
 DYNAMIC_LIBS = 
 EXECUTABLE = cleandns
 TEST_CASE = 
-RELAY_OBJECT = 
+RELAY_OBJECT = upfilter
 
-all	: PreProcess $(STATIC_LIBS) $(DYNAMIC_LIBS) $(EXECUTABLE) $(TEST_CASE) AfterMake
+all	: PreProcess $(STATIC_LIBS) $(DYNAMIC_LIBS) $(EXECUTABLE) $(TEST_CASE) $(RELAY_OBJECT) AfterMake
 
 PreProcess :
 	@if test -d $(OUT_DIR); then rm -rf $(OUT_DIR); fi
@@ -102,6 +102,7 @@ install:
 AfterMake : 
 	@if [ "$(MAKECMDGOALS)" == "release" ]; then rm -vf src/*.o; rm -vf 3rd/jsoncpp/*.o; rm -vf 3rd/socklite/*.o; rm -vf 3rd/cpputility/*.o; fi
 	@mv -vf $(CLRD_ROOT)/cleandns $(OUT_DIR)/bin/cleandns
+	@mv -vf $(CLRD_ROOT)/upfilter $(OUT_DIR)/bin/upfilter
 
 debug : PreProcess $(STATIC_LIBS) $(DYNAMIC_LIBS) $(EXECUTABLE) $(TEST_CASE) AfterMake
 	@exit 0
@@ -112,9 +113,15 @@ release : PreProcess $(STATIC_LIBS) $(DYNAMIC_LIBS) $(EXECUTABLE) $(TEST_CASE) A
 withpg : PreProcess $(STATIC_LIBS) $(DYNAMIC_LIBS) $(EXECUTABLE) $(TEST_CASE) AfterMake
 	@exit 0
 
-%.o: src/%.cpp
+%.o: src/%.cpp 
 	$(CC) $(CXXFLAGS) -c -o $@ $<
 
 cleandns: $(OBJ_FILES)
 	$(CC) -o $@ $^ $(CXXFLAGS) -lresolv
+
+upfilter.o: tools/upfilter.cpp
+	$(CC) -o tools/upfilter.o $(CXXFLAGS)
+
+upfilter: tools/upfilter.o 3rd/socklite/socketlite.o
+	$(CC) -o upfilter tools/upfilter.o 3rd/socklite/socketlite.o $(CXXFLAGS) -lresolv
 

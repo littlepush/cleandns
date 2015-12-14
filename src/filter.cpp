@@ -309,6 +309,11 @@ bool clnd_filter_redirect::is_match_filter(const string &query_domain) const {
     return false;
 }
 
+void clnd_filter_redirect::add_rule(const string& domain_rule) {
+    rules_[domain_rule] = true;
+}
+
+
 lp_clnd_filter create_filter_from_config(const Json::Value &config_node) {
     string _mode = check_key_and_get_value(config_node, "mode").asString();
     clnd_filter_mode _md = clnd_filter_mode_from_string(_mode);
@@ -363,6 +368,13 @@ lp_clnd_filter clnd_search_match_filter(const string &domain)
     return _g_default_filter;
 }
 
+lp_clnd_filter clnd_find_filter_by_name(const string& filter_name)
+{
+    for ( auto _f : _g_filter_array ) {
+        if ( _f->name == filter_name ) return _f;
+    }
+    return lp_clnd_filter(NULL);
+}
 /*
  Push Chen.
  littlepush@gmail.com
