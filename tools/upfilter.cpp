@@ -44,7 +44,11 @@
 
 int main(int argc, char * argv[])
 {
-    cp_logger::start(stderr, log_notice);
+    #ifdef DEBUG
+        cp_logger::start(stderr, log_debug);
+    #else
+        cp_logger::start(stderr, log_notice);
+    #endif
 
     if ( argc < 3 ) {
         cerr << "please set the arguments of the update filter tool" << endl;
@@ -68,7 +72,7 @@ int main(int argc, char * argv[])
         << "{"
         <<  "\"command\":\"add_filter\","
         <<  "\"filter\":\"" << _filter_name << "\","
-        <<  "\"rule\":" << _domain_rule << "\""
+        <<  "\"rule\":\"" << _domain_rule << "\""
         << "}";
 
     ldebug << "send pkg: " << _oss.str() << lend;

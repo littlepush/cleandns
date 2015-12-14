@@ -533,6 +533,7 @@ int main( int argc, char *argv[] ) {
                         return;
                     }
 
+                    linfo << "get a control command \'add_filter\' for filter: " << _filter << ", rule: " << _domain_rule << lend;
                     lp_clnd_filter _f = clnd_find_filter_by_name(_filter);
                     if ( !_f ) {
                         lerror << "no such filter in the list" << lend;
