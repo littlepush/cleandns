@@ -159,7 +159,7 @@ void clnd_tcp_redirect_to_tcp(sl_event e, sl_event re, const string & incoming_p
         if ( f->socks5 ) {
             string _domain;
             std::vector<uint32_t> _iplist;
-            dns_get_a_records(_rbuf.c_str() + 1, _rbuf.size() - 2, _domain, _iplist);
+            dns_get_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, _domain, _iplist);
             for ( auto ip : _iplist ) {
                 _g_service_config->a_records_cache[ip] = true;
             }
@@ -193,7 +193,7 @@ void clnd_udp_redirect_to_tcp(sl_event e, sl_event re, const string & incoming_p
         sl_tcp_socket_read(re.so, _rbuf);
         string _domain;
         std::vector<uint32_t> _iplist;
-        dns_get_a_records(_rbuf.c_str() + 1, _rbuf.size() - 2, _domain, _iplist);
+        dns_get_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, _domain, _iplist);
         for ( auto ip : _iplist ) {
             _g_service_config->a_records_cache[ip] = true;
         }
@@ -607,13 +607,22 @@ int main( int argc, char *argv[] ) {
                     lerror << "maybe this is a BSD system, which does not support SO_ORIGINAL_DST" << lend;
                     sl_socket_close(e.so);
                     return;
-                }
+                } else {
+					//sl_peerinfo _lpi(e.address.sin_addr.s_addr, ntohs(e.address.sin_port));
+					uint32_t _laddr, _lport;
+					network_peer_info_from_socket(e.so, _laddr, _lport);
+					sl_peerinfo _lpi(_laddr, _lport);
+					linfo << "the incoming connection " << _lpi << " want to connect to " << _orgnl << " via current gateway" << lend;
+				}
                 sl_peerinfo _socks5;
                 // Search for dns cache
                 if ( _g_service_config->a_records_cache.find(_orgnl.ipaddress) 
                     != end(_g_service_config->a_records_cache) ) {
                     _socks5 = _g_service_config->gateway_socks5;
                 }
+				if ( _socks5 ) {
+					ldebug << "we are going to connect to original " << _orgnl << " with proxy " << _socks5 << lend;
+				}
                 SOCKET_T _rso = sl_tcp_socket_init();
                 if ( !sl_tcp_socket_connect(_rso, _socks5, _orgnl.ipaddress, _orgnl.port_number, [e](sl_event re) {
                     if ( re.event == SL_EVENT_FAILED ) {
