@@ -51,8 +51,8 @@ int main(int argc, char * argv[])
     #endif
 
     if ( argc < 3 ) {
-        cerr << "please set the arguments of the update filter tool" << endl;
-        cerr << "usage: upfilter [@server:port] filter_name domain_rule" << endl;
+        lerror << "please set the arguments of the update filter tool" << lend;
+        lerror << "usage: upfilter [@server:port] [-a|d] filter_name domain_rule" << lend;
         return 1;
     }
 
@@ -63,6 +63,20 @@ int main(int argc, char * argv[])
         _si = _server_info.substr(1);
         _first_arg_index += 1;
     }
+    string _cmd = argv[_first_arg_index];
+    if ( _cmd[0] == '-' ) {
+        if ( _cmd == "-a" ) {
+            _cmd = "add_filter";
+        } else if ( _cmd == "-d" ) {
+            _cmd = "del_filter";
+        } else {
+            lerror << "unsupport command: " << _cmd << lend;
+            return 2;
+        }
+        _first_arg_index += 1;
+    } else {
+        _cmd = "add_filter";
+    }
     string _filter_name = argv[_first_arg_index];
     string _domain_rule = argv[_first_arg_index + 1];
 
@@ -70,7 +84,7 @@ int main(int argc, char * argv[])
     ostringstream _oss;
     _oss 
         << "{"
-        <<  "\"command\":\"add_filter\","
+        <<  "\"command\":\"" << _cmd << "\","
         <<  "\"filter\":\"" << _filter_name << "\","
         <<  "\"rule\":\"" << _domain_rule << "\""
         << "}";
@@ -88,36 +102,39 @@ int main(int argc, char * argv[])
             lerror << "failed to connect to the server" << lend;
             usleep(20);
             __g_thread_mutex().unlock();
-            return;
+            exit(3);
         }
         if ( !sl_tcp_socket_send(e.so, _oss.str()) ) {
             usleep(20);
             __g_thread_mutex().unlock();
-            return;
+            exit(3);
         }
         if ( !sl_tcp_socket_monitor(e.so, [](sl_event e){
             if ( e.event == SL_EVENT_FAILED ) {
                 usleep(20);
                 __g_thread_mutex().unlock();
-                return;
+                exit(3);
             }
             string _resp;
             if ( !sl_tcp_socket_read(e.so, _resp) ) {
                 usleep(20);
                 __g_thread_mutex().unlock();
-                return;
+                exit(3);
             }
+            int _retval = 0;
             if ( _resp == "{\"errno\":0}" ) {
                 lnotice << "success to update the filter" << lend;
             } else {
                 lerror << _resp << lend;
+                _retval = 3;
             }
             usleep(20);
             __g_thread_mutex().unlock();
+            exit(_retval);
         })) {
             usleep(20);
             __g_thread_mutex().unlock();
-            return;
+            exit(3);
         }
     })) {
         usleep(20);

@@ -84,6 +84,7 @@ class clnd_filter_redirect;
 // Basic Filter class
 class clnd_filter {
 protected:
+    mutable mutex           filter_mutex_;
     string                  name_;
     clnd_protocol_t         protocol_;
     sl_peerinfo             parent_;
@@ -146,6 +147,7 @@ public:
     virtual void output_detail_info(ostream &os) const;
     virtual bool is_match_filter(const string &query_domain) const;
     void add_rule(const string& domain_rule);
+    void del_rule(const string& domain_rule);
 };
 
 typedef shared_ptr<clnd_filter> lp_clnd_filter;

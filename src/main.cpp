@@ -522,7 +522,7 @@ int main( int argc, char *argv[] ) {
                     sl_socket_close(e.so);
                     return;
                 }
-                if ( _cmd == "add_filter" ) {
+                if ( _cmd == "add_filter" || _cmd == "del_filter" ) {
                     string _filter = check_key_with_default(_cmd_node, "filter", "default").asString();
                     string _domain_rule = check_key_with_default(_cmd_node, "rule", "localhost").asString();
 
@@ -532,7 +532,9 @@ int main( int argc, char *argv[] ) {
                         return;
                     }
 
-                    linfo << "get a control command \'add_filter\' for filter: " << _filter << ", rule: " << _domain_rule << lend;
+                    linfo 
+                        << "get a control command \'" << _cmd << "\' for filter: " 
+                        << _filter << ", rule: " << _domain_rule << lend;
                     lp_clnd_filter _f = clnd_find_filter_by_name(_filter);
                     if ( !_f ) {
                         lerror << "no such filter in the list" << lend;
@@ -544,9 +546,13 @@ int main( int argc, char *argv[] ) {
                         ostringstream _msg;
                         _msg << "{\"errno\": 2,\"errmsg\":\"" << _oss.str() << "\"}";
                         sl_tcp_socket_send(e.so, _msg.str());
-                    }else {
+                    } else {
                         shared_ptr<clnd_filter_redirect> _rf = dynamic_pointer_cast<clnd_filter_redirect>(_f);
-                        _rf->add_rule(_domain_rule);
+                        if ( _cmd == "add_filter" ) {
+                            _rf->add_rule(_domain_rule);
+                        } else {
+                            _rf->del_rule(_domain_rule);
+                        }
                         sl_tcp_socket_send(e.so, "{\"errno\":0}");
                     }
                 }

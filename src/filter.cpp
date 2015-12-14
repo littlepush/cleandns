@@ -301,6 +301,7 @@ bool clnd_filter_redirect::is_match_filter(const string &query_domain) const {
             _query_format.push_back(_format + "*");
         }
     }
+    lock_guard<mutex> _(filter_mutex_);
     for ( auto _f : _query_format ) {
         if ( rules_.find(_f) != end(rules_) ) {
             return true;
@@ -310,7 +311,12 @@ bool clnd_filter_redirect::is_match_filter(const string &query_domain) const {
 }
 
 void clnd_filter_redirect::add_rule(const string& domain_rule) {
+    lock_guard<mutex> _(filter_mutex_);
     rules_[domain_rule] = true;
+}
+void clnd_filter_redirect::del_rule(const string& domain_rule) {
+    lock_guard<mutex> _(filter_mutex_);
+    rules_.erase(domain_rule);
 }
 
 
