@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc2-6-gf0abfab
+// Current Version: 0.6-rc2-7-g8ca93e3
 
 #include "socketlite.h"
 // src/dns.cpp

@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc2-6-gf0abfab
+// Current Version: 0.6-rc2-7-g8ca93e3
 
 #pragma once
 // inc/thread.hpp
@@ -110,11 +110,20 @@ namespace cpputility {
         }
         // Stop all thread registered
         void join_all_threads() {
-            lock_guard<mutex> _(info_mutex_);
-            for ( auto &_kv : info_map_ ) {
-                lock_guard<mutex>(*_kv.second.first);
-                *_kv.second.second = false;
-            }
+            do {
+                lock_guard<mutex> _(info_mutex_);
+                for ( auto &_kv : info_map_ ) {
+                    lock_guard<mutex>(*_kv.second.first);
+                    *_kv.second.second = false;
+                }
+            } while( false );
+            do {
+                if ( true ) {
+                    lock_guard<mutex> _(info_mutex_);
+                    if ( info_map_.size() == 0 ) return;
+                }
+                usleep(1000);   // wait for 1ms
+            } while ( true );
         }
         // join specified thread
         void safe_join_thread(thread::id tid) {
@@ -180,9 +189,8 @@ namespace cpputility {
         signal_agent(before_exit_t cb) : exit_callback_(cb) { set_signal_handler(); };
         ~signal_agent() {
             wait_for_exit_signal();
-            join_all_threads();
             if ( exit_callback_ ) exit_callback_() ;
-            usleep(100000); // sleep 100ms before exit
+            join_all_threads();
         }
     };
 
