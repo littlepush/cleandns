@@ -111,7 +111,7 @@ clnd_config_service::clnd_config_service( const Json::Value& config_node ) :
     control_port_ = check_key_with_default(config_node, "control_port", 1053).asUInt();
     gateway_ = check_key_with_default(config_node, "gateway", false).asBool();
     gateway_port_ = check_key_with_default(config_node, "gateway_port", 4300).asUInt();
-    gateway_socks5_ = check_key_with_default(config_node, "gateway_socks", "0.0.0.0:0").asString();
+    gateway_socks5_ = check_key_with_default(config_node, "gateway_socks5", "0.0.0.0:0").asString();
 }
 
 void clnd_config_service::start_log() const {
