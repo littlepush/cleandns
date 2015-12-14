@@ -71,24 +71,32 @@ cp_log_level clnd_config_service::_loglv_from_string(const string& loglv_string)
     return _lv;
 }
 clnd_config_service::clnd_config_service( ) :
+    a_records_cache(a_records_cache_),
     service_protocol(service_protocol_),
     port(port_),
     logpath(logpath_),
     loglv(loglv_),
     daemon(daemon_),
     pidfile(pidfile_), 
-    control_port(control_port_)
+    control_port(control_port_),
+    gateway(gateway_),
+    gateway_port(gateway_port_),
+    gateway_socks5(gateway_socks5_)
     { /* nothing */ }
 clnd_config_service::~clnd_config_service() { /* nothing */ }
 
 clnd_config_service::clnd_config_service( const Json::Value& config_node ) :
+    a_records_cache(a_records_cache_),
     service_protocol(service_protocol_),
     port(port_),
     logpath(logpath_),
     loglv(loglv_),
     daemon(daemon_),
     pidfile(pidfile_),
-    control_port(control_port_)
+    control_port(control_port_),
+    gateway(gateway_),
+    gateway_port(gateway_port_),
+    gateway_socks5(gateway_socks5_)
 {
     // Service
     service_protocol_ = clnd_protocol_from_string(
@@ -101,6 +109,9 @@ clnd_config_service::clnd_config_service( const Json::Value& config_node ) :
     daemon_ = check_key_with_default(config_node, "daemon", true).asBool();
     pidfile_ = check_key_with_default(config_node, "pidfile", "/var/run/cleandns/pid").asString();
     control_port_ = check_key_with_default(config_node, "control_port", 1053).asUInt();
+    gateway_ = check_key_with_default(config_node, "gateway", false).asBool();
+    gateway_port_ = check_key_with_default(config_node, "gateway_port", 4300).asUInt();
+    gateway_socks5_ = check_key_with_default(config_node, "gateway_socks", "0.0.0.0:0").asString();
 }
 
 void clnd_config_service::start_log() const {

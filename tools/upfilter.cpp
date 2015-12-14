@@ -100,24 +100,20 @@ int main(int argc, char * argv[])
     if ( !sl_tcp_socket_connect(_ft, _si, [&_oss](sl_event e){
         if ( e.event == SL_EVENT_FAILED ) {
             lerror << "failed to connect to the server" << lend;
-            usleep(20);
             __g_thread_mutex().unlock();
             return;
         }
         if ( !sl_tcp_socket_send(e.so, _oss.str()) ) {
-            usleep(20);
             __g_thread_mutex().unlock();
             return;
         }
         if ( !sl_tcp_socket_monitor(e.so, [](sl_event e){
             if ( e.event == SL_EVENT_FAILED ) {
-                usleep(20);
                 __g_thread_mutex().unlock();
                 return;
             }
             string _resp;
             if ( !sl_tcp_socket_read(e.so, _resp) ) {
-                usleep(20);
                 __g_thread_mutex().unlock();
                 return;
             }
@@ -126,15 +122,12 @@ int main(int argc, char * argv[])
             } else {
                 lerror << _resp << lend;
             }
-            usleep(20);
             __g_thread_mutex().unlock();
         })) {
-            usleep(20);
             __g_thread_mutex().unlock();
             return;
         }
     })) {
-        usleep(20);
         __g_thread_mutex().unlock();
     }
     return 0;

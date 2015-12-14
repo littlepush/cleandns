@@ -54,28 +54,37 @@
 
 #include <list>
 #include <algorithm>
+#include <unordered_map>
 
 class clnd_config_service {
 protected:
-    clnd_protocol_t         service_protocol_;
-    uint16_t                port_;
-    string                  logpath_;
-    cp_log_level            loglv_;
-    bool                    daemon_;
-    string                  pidfile_;
-    uint16_t                control_port_;
+    unordered_map<uint32_t, bool>   a_records_cache_;
+    clnd_protocol_t                 service_protocol_;
+    uint16_t                        port_;
+    string                          logpath_;
+    cp_log_level                    loglv_;
+    bool                            daemon_;
+    string                          pidfile_;
+    uint16_t                        control_port_;
+    bool                            gateway_;
+    uint16_t                        gateway_port_;
+    sl_peerinfo                     gateway_socks5_;
 
     cp_log_level _loglv_from_string(const string& loglv_string);
 public:
 
     // const reference
-    const clnd_protocol_t & service_protocol;
-    const uint16_t &        port;
-    const string &          logpath;
-    const cp_log_level &    loglv;
-    const bool &            daemon;
-    const string &          pidfile;
-    const uint16_t &        control_port;
+    unordered_map<uint32_t, bool>&  a_records_cache;
+    const clnd_protocol_t &         service_protocol;
+    const uint16_t &                port;
+    const string &                  logpath;
+    const cp_log_level &            loglv;
+    const bool &                    daemon;
+    const string &                  pidfile;
+    const uint16_t &                control_port;
+    const bool &                    gateway;
+    const uint16_t &                gateway_port;
+    const sl_peerinfo &             gateway_socks5;
 
     clnd_config_service( );
     virtual ~clnd_config_service();

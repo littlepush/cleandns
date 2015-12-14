@@ -156,6 +156,14 @@ void clnd_tcp_redirect_to_tcp(sl_event e, sl_event re, const string & incoming_p
         }
         string _rbuf;
         sl_tcp_socket_read(re.so, _rbuf);
+        if ( f->socks5 ) {
+            string _domain;
+            std::vector<uint32_t> _iplist;
+            dns_get_a_records(_rbuf.c_str() + 1, _rbuf.size() - 2, _domain, _iplist);
+            for ( auto ip : _iplist ) {
+                _g_service_config->a_records_cache[ip] = true;
+            }
+        }
         clnd_dump_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, f->parent);
         sl_tcp_socket_send(e.so, _rbuf);
 
@@ -183,6 +191,12 @@ void clnd_udp_redirect_to_tcp(sl_event e, sl_event re, const string & incoming_p
         }
         string _rbuf;
         sl_tcp_socket_read(re.so, _rbuf);
+        string _domain;
+        std::vector<uint32_t> _iplist;
+        dns_get_a_records(_rbuf.c_str() + 1, _rbuf.size() - 2, _domain, _iplist);
+        for ( auto ip : _iplist ) {
+            _g_service_config->a_records_cache[ip] = true;
+        }
         clnd_dump_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, f->parent);
 
         string _urbuf;
@@ -191,6 +205,21 @@ void clnd_udp_redirect_to_tcp(sl_event e, sl_event re, const string & incoming_p
 
         // Release the socket resource
         sl_socket_close(re.so);
+    });
+}
+
+void tcp_redirect_callback(sl_event e, sl_event re) {
+    if ( e.event == SL_EVENT_FAILED ) {
+        linfo << "socket has disconnected" << lend;
+        sl_socket_close(e.so);
+        sl_socket_close(re.so);
+        return;
+    }
+    string _buf;
+    sl_tcp_socket_read(e.so, _buf, 512000);
+    sl_tcp_socket_send(re.so, _buf);
+    sl_tcp_socket_monitor(e.so, [re](sl_event e) {
+        tcp_redirect_callback(e, re);
     });
 }
 
@@ -566,6 +595,62 @@ int main( int argc, char *argv[] ) {
             __g_thread_mutex().unlock();
         }();
     } while(false);
+
+    if ( _g_service_config->gateway && _g_service_config->gateway_port <= 65535 ) {
+        SOCKET_T _so = sl_tcp_socket_init();
+        if ( !sl_tcp_socket_listen(_so, sl_peerinfo(INADDR_ANY, _g_service_config->gateway_port), [&](sl_event e){
+            if ( !sl_tcp_socket_monitor(e.so, [](sl_event e){
+                if ( e.event == SL_EVENT_FAILED ) {
+                    sl_socket_close(e.so);
+                    return;
+                }
+                sl_peerinfo _orgnl = sl_tcp_get_original_dest(e.so);
+                if ( !_orgnl ) {
+                    lerror << "failed to get the original dest info" << lend;
+                    lerror << "maybe this is a BSD system, which does not support SO_ORIGINAL_DST" << lend;
+                    sl_socket_close(e.so);
+                    return;
+                }
+                sl_peerinfo _socks5;
+                // Search for dns cache
+                if ( _g_service_config->a_records_cache.find(_orgnl.ipaddress) 
+                    != end(_g_service_config->a_records_cache) ) {
+                    _socks5 = _g_service_config->gateway_socks5;
+                }
+                SOCKET_T _rso = sl_tcp_socket_init();
+                if ( !sl_tcp_socket_connect(_rso, _socks5, _orgnl.ipaddress, _orgnl.port_number, [e](sl_event re) {
+                    if ( re.event == SL_EVENT_FAILED ) {
+                        sl_socket_close(e.so);
+                        sl_socket_close(re.so);
+                        return;
+                    }
+                    if ( !sl_tcp_socket_monitor(e.so, [re](sl_event e){
+                        tcp_redirect_callback(e, re);
+                    }, true) ) {
+                        sl_socket_close(e.so);
+                        sl_socket_close(re.so);
+                        return;
+                    }
+                    if ( !sl_tcp_socket_monitor(re.so, [e](sl_event re){
+                        tcp_redirect_callback(re, e);
+                    }) ) {
+                        sl_socket_close(e.so);
+                        sl_socket_close(re.so);
+                        return;
+                    }
+                })) {
+                    sl_socket_close(e.so);
+                    sl_socket_close(_rso);
+                }
+            }, true)) {
+                lerror << "failed to monitor on the new incoming socket: " << e.so << lend;
+                sl_socket_close(e.so);
+            }
+        })) {
+            lerror << "failed to listen on tcp gateway port: " << _g_service_config->gateway_port << lend;
+            __g_thread_mutex().unlock();
+        }
+    }
 
     return 0;
 }
