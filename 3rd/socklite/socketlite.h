@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc2-2-g33f6388
+// Current Version: 0.6-rc2-3-g4ef7e1d
 
 #pragma once
 // inc/thread.hpp
@@ -1573,11 +1573,11 @@ bool sl_tcp_socket_listen(SOCKET_T tso, const sl_peerinfo& bind_port, sl_socket_
 sl_peerinfo sl_tcp_get_original_dest(SOCKET_T tso);
 
 // UDP Methods
-SOCKET_T sl_udp_socket_init();
+SOCKET_T sl_udp_socket_init(const sl_peerinfo& bind_addr = sl_peerinfo::nan());
 bool sl_udp_socket_send(SOCKET_T uso, const string &pkg, const sl_peerinfo& peer);
 bool sl_udp_socket_monitor(SOCKET_T uso, const sl_peerinfo& peer, sl_socket_event_handler callback);
 bool sl_udp_socket_read(SOCKET_T uso, struct sockaddr_in addr, string& buffer, size_t max_buffer_size = 512);
-bool sl_udp_socket_listen(SOCKET_T uso, const sl_peerinfo& bind_port, sl_socket_event_handler accept_callback);
+bool sl_udp_socket_listen(SOCKET_T uso, sl_socket_event_handler accept_callback);
 
 #endif 
 

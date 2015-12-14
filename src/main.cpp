@@ -417,8 +417,8 @@ int main( int argc, char *argv[] ) {
     }
 
     if ( _g_service_config->service_protocol & clnd_protocol_udp ) {
-        SOCKET_T _so = sl_udp_socket_init();
-        sl_udp_socket_listen(_so, sl_peerinfo(INADDR_ANY, _g_service_config->port), [&](sl_event e){
+        SOCKET_T _so = sl_udp_socket_init(sl_peerinfo(INADDR_ANY, _g_service_config->port));
+        sl_udp_socket_listen(_so, [&](sl_event e){
             sl_peerinfo _ipeer(e.address.sin_addr.s_addr, ntohs(e.address.sin_port));
             string _incoming_buf;
             if ( !sl_udp_socket_read(e.so, e.address, _incoming_buf) ) {
