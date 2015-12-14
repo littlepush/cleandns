@@ -190,6 +190,10 @@ void clnd_filter_local::output_detail_info(ostream &os) const {
 }
 bool clnd_filter_local::is_match_filter(const string &query_domain) const {
     if ( query_domain.size() < domain.size() ) return false;
+    if ( query_domain.size() == domain.size() && query_domain == domain ) {
+        if ( A_records_.find("@") != end(A_records_) ) return true;
+        return false;
+    }
     size_t _qs = query_domain.size();
     size_t _ds = domain.size();
     for ( size_t i = 0; i < domain.size(); ++i ) {
@@ -197,7 +201,9 @@ bool clnd_filter_local::is_match_filter(const string &query_domain) const {
     }
     if ( query_domain[_qs - _ds - 1] != '.' ) return false;
     string _sub = query_domain.substr(0, _qs - _ds - 1);
+    if ( A_records_.find("*") != end(A_records_) ) return true;
     if ( A_records_.find(_sub) != end(A_records_) ) return true;
+    if ( CName_records_.find("*") != end(CName_records_) ) return true;
     if ( CName_records_.find(_sub) != end(CName_records_) ) return true;
     return false;
 }
@@ -207,9 +213,18 @@ void clnd_filter_local::get_result_for_domain(
     vector<string> &results, 
     clnd_local_result_type &type) const 
 {
-
     size_t _qs = query_domain.size();
     size_t _ds = domain.size();
+    if ( _qs == _ds ) {
+        auto _a_it = A_records_.find("@");
+        results.clear();
+        for ( auto& _ip_it : _a_it->second ) {
+            results.push_back(_ip_it);
+        }
+        type = clnd_local_result_type_A;
+        return;
+    }
+
     string _sub = query_domain.substr(0, _qs - _ds - 1);
     if ( A_records_.find(_sub) != end(A_records_) ) {
         auto _a_it = A_records_.find(_sub);
@@ -219,8 +234,21 @@ void clnd_filter_local::get_result_for_domain(
         }
         type = clnd_local_result_type_A;
     }
+    if ( A_records_.find("*") != end(A_records_) ) {
+        auto _a_it = A_records_.find("*");
+        results.clear();
+        for ( auto& _ip_it : _a_it->second ) {
+            results.push_back(_ip_it);
+        }
+        type = clnd_local_result_type_A;
+    }
     if ( CName_records_.find(_sub) != end(CName_records_) ) {
         auto _c_it = CName_records_.find(_sub);
+        results.push_back(_c_it->second);
+        type = clnd_local_result_type_CName;
+    }
+    if ( CName_records_.find("*") != end(CName_records_) ) {
+        auto _c_it = CName_records_.find("*");
         results.push_back(_c_it->second);
         type = clnd_local_result_type_CName;
     }

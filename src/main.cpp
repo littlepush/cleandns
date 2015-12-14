@@ -112,6 +112,16 @@ void clnd_get_local_filter(sl_event e, const string& incoming_pkg, lp_clnd_filte
             _lresult,
             outbuf);            
     }
+    // DUMP local result
+    for ( auto& _r : _lresult ) {
+        linfo << "R:[localhost] D:[" << domain << "] ";
+        if ( _type == clnd_local_result_type_A ) {
+            linfo << "A:[";
+        } else {
+            linfo << "C:[";
+        }
+        linfo << _r << "]" << lend;
+    }
 }
 void clnd_tcp_get_local_filter(sl_event e, const string& incoming_pkg, lp_clnd_filter f, const string &domain) {
     string _rbuf;
