@@ -614,13 +614,14 @@ int main( int argc, char *argv[] ) {
 					sl_peerinfo _lpi(_laddr, _lport);
 					linfo << "the incoming connection " << _lpi << " want to connect to " << _orgnl << " via current gateway" << lend;
 				}
-                sl_peerinfo _socks5;
+                sl_peerinfo _socks5 = sl_peerinfo::nan();
                 // Search for dns cache
                 if ( _g_service_config->a_records_cache.find(_orgnl.ipaddress) 
                     != end(_g_service_config->a_records_cache) ) {
                     _socks5 = _g_service_config->gateway_socks5;
                 }
 				if ( _socks5 ) {
+					ldebug << "the socks5 port number is: " << _socks5.port_number << lend;
 					ldebug << "we are going to connect to original " << _orgnl << " with proxy " << _socks5 << lend;
 				}
                 SOCKET_T _rso = sl_tcp_socket_init();
