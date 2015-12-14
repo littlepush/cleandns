@@ -94,7 +94,7 @@ pgclean :
 	@rm -rf $(TEST_ROOT)/withpg
 
 clean :
-	rm -vf src/*.o; rm -vf 3rd/jsoncpp/*.o; rm -vf 3rd/socklite/*.o; rm -vf 3rd/cpputility/*.o; rm -rf $(OUT_DIR)
+	rm -vf src/*.o; rm -vf tools/*.o; rm -vf 3rd/jsoncpp/*.o; rm -vf 3rd/socklite/*.o; rm -vf 3rd/cpputility/*.o; rm -rf $(OUT_DIR)
 
 install:
 	@if [ -f ./result/bin/cleandns ]; then cp -v ./result/bin/cleandns /usr/bin/; else echo "please make first"; fi

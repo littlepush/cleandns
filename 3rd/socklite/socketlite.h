@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc2-5-g3ac285e
+// Current Version: 0.6-rc2-6-gf0abfab
 
 #pragma once
 // inc/thread.hpp
@@ -1567,7 +1567,7 @@ bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& peer, sl_socket_even
 // Async connect to the host via a socks5 proxy
 bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& socks5, const string& host, uint16_t port, sl_socket_event_handler callback);
 bool sl_tcp_socket_send(SOCKET_T tso, const string &pkg);
-bool sl_tcp_socket_monitor(SOCKET_T tso, sl_socket_event_handler callback);
+bool sl_tcp_socket_monitor(SOCKET_T tso, sl_socket_event_handler callback, bool new_incoming = false);
 bool sl_tcp_socket_read(SOCKET_T tso, string& buffer, size_t max_buffer_size = 4098);
 bool sl_tcp_socket_listen(SOCKET_T tso, const sl_peerinfo& bind_port, sl_socket_event_handler accept_callback);
 sl_peerinfo sl_tcp_get_original_dest(SOCKET_T tso);

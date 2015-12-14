@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc2-5-g3ac285e
+// Current Version: 0.6-rc2-6-gf0abfab
 
 #include "socketlite.h"
 // src/dns.cpp
@@ -1852,7 +1852,7 @@ bool sl_tcp_socket_send(SOCKET_T tso, const string &pkg)
     }
     return true;
 }
-bool sl_tcp_socket_monitor(SOCKET_T tso, sl_socket_event_handler callback)
+bool sl_tcp_socket_monitor(SOCKET_T tso, sl_socket_event_handler callback, bool new_incoming)
 {
     if ( SOCKET_NOT_VALIDATE(tso) ) return false;
     if ( !callback ) return false;
@@ -1870,7 +1870,7 @@ bool sl_tcp_socket_monitor(SOCKET_T tso, sl_socket_event_handler callback)
         callback(e);
     });
 
-    return sl_poller::server().monitor_socket(tso, true, SL_EVENT_DEFAULT, true);
+    return sl_poller::server().monitor_socket(tso, true, SL_EVENT_DEFAULT, !new_incoming);
 }
 bool sl_tcp_socket_read(SOCKET_T tso, string& buffer, size_t max_buffer_size)
 {

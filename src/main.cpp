@@ -418,7 +418,7 @@ int main( int argc, char *argv[] ) {
                         sl_socket_close(_st);
                     }();
                 }
-            });
+            }, true);
         }) ? void() : [](){
             lerror << "failed to listen on tcp port: " << _g_service_config->port << lend;
             // Internal method: force to safe exit the app
@@ -551,7 +551,7 @@ int main( int argc, char *argv[] ) {
                     }
                 }
                 sl_socket_close(e.so);
-            }) ) {
+            }, true) ) {
                 lerror << "failed to monitor on the new incoming socket: " << e.so << lend;
                 sl_socket_close(e.so);
             }
