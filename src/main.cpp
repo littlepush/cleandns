@@ -433,6 +433,7 @@ int main( int argc, char *argv[] ) {
             }
             string _domain;
             dns_get_domain(_incoming_buf.c_str(), _incoming_buf.size(), _domain);
+            linfo << "the incoming request " << _ipeer << " want to query domain: " << _domain << lend;
             // Search a filter
             lp_clnd_filter _f = clnd_search_match_filter(_domain);
             // if is local filter, generate a response package
@@ -473,7 +474,7 @@ int main( int argc, char *argv[] ) {
                         << " for filter" 
                         << _f->name 
                         << lend;
-                    sl_socket_close(e.so);
+                    //sl_socket_close(e.so);
                     sl_socket_close(_st);
                 }();
             }
