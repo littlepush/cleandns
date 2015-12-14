@@ -523,9 +523,8 @@ int main( int argc, char *argv[] ) {
                     return;
                 }
                 if ( _cmd == "add_filter" ) {
-                    string _filter, _domain_rule;
-                    check_key_with_default(_cmd_node, "filter", "default").asString();
-                    check_key_with_default(_cmd_node, "rule", "localhost").asString();
+                    string _filter = check_key_with_default(_cmd_node, "filter", "default").asString();
+                    string _domain_rule = check_key_with_default(_cmd_node, "rule", "localhost").asString();
 
                     if ( _filter == "default" || _domain_rule == "localhost" ) {
                         lerror << "invalidate command for add_filter" << lend;
@@ -537,7 +536,7 @@ int main( int argc, char *argv[] ) {
                     lp_clnd_filter _f = clnd_find_filter_by_name(_filter);
                     if ( !_f ) {
                         lerror << "no such filter in the list" << lend;
-                        sl_tcp_socket_send(e.so, "{\"errno\": 1,\"errmsg\":\"such filter in the list\"}");
+                        sl_tcp_socket_send(e.so, "{\"errno\": 1,\"errmsg\":\"no such filter in the list\"}");
                     } else if ( _f->mode != clnd_filter_mode_redirect ) {
                         ostringstream _oss;
                         _oss << "filter: " << _f->name << " is not a redirect filter, cannot add rule";
