@@ -217,11 +217,22 @@ void tcp_redirect_callback(sl_event e, sl_event re) {
         return;
     }
     string _buf;
-    sl_tcp_socket_read(e.so, _buf, 512000);
-    sl_tcp_socket_send(re.so, _buf);
-    sl_tcp_socket_monitor(e.so, [re](sl_event e) {
+    if ( !sl_tcp_socket_read(e.so, _buf, 512000) ) {
+        sl_socket_close(e.so);
+        sl_socket_close(re.so);
+        return;
+    }
+    if ( !sl_tcp_socket_send(re.so, _buf) ) {
+        sl_socket_close(e.so);
+        sl_socket_close(re.so);
+        return;
+    }
+    if ( !sl_tcp_socket_monitor(e.so, [re](sl_event e) {
         tcp_redirect_callback(e, re);
-    });
+    }) ) {
+        sl_socket_close(e.so);
+        sl_socket_close(re.so);
+    }
 }
 
 int main( int argc, char *argv[] ) {
