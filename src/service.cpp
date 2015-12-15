@@ -128,6 +128,16 @@ void clnd_config_service::start_log() const {
         log_arguments::instance().start(logpath_, loglv_);
     }
 }
+void clnd_config_service::add_a_record_cache(uint32_t ipaddr)
+{
+    lock_guard<mutex> _(a_records_mutex_);
+    a_records_cache_[ipaddr] = true;
+}
+bool clnd_config_service::is_ip_in_a_record_cache(uint32_t ipaddr)
+{
+    lock_guard<mutex> _(a_records_mutex_);
+    return a_records_cache_.find(ipaddr) != end(a_records_cache_);
+}
 
 
 #ifdef CLRD_AUTO_GENERATE_DOC

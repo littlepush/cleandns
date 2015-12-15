@@ -59,6 +59,7 @@
 class clnd_config_service {
 protected:
     unordered_map<uint32_t, bool>   a_records_cache_;
+    mutex                           a_records_mutex_;
     clnd_protocol_t                 service_protocol_;
     uint16_t                        port_;
     string                          logpath_;
@@ -92,6 +93,10 @@ public:
     clnd_config_service( const Json::Value& config_node );
 
     void start_log() const;
+
+    // Local Gateway Black List cache
+    void add_a_record_cache(uint32_t ipaddr);
+    bool is_ip_in_a_record_cache(uint32_t ipaddr);
 };
 
 // Output the main help document

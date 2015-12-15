@@ -161,7 +161,8 @@ void clnd_tcp_redirect_to_tcp(sl_event e, sl_event re, const string & incoming_p
             std::vector<uint32_t> _iplist;
             dns_get_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, _domain, _iplist);
             for ( auto ip : _iplist ) {
-                _g_service_config->a_records_cache[ip] = true;
+                //_g_service_config->a_records_cache[ip] = true;
+                _g_service_config->add_a_record_cache(ip);
             }
         }
         clnd_dump_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, f->parent);
@@ -195,7 +196,7 @@ void clnd_udp_redirect_to_tcp(sl_event e, sl_event re, const string & incoming_p
         std::vector<uint32_t> _iplist;
         dns_get_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, _domain, _iplist);
         for ( auto ip : _iplist ) {
-            _g_service_config->a_records_cache[ip] = true;
+            _g_service_config->add_a_record_cache(ip);
         }
         clnd_dump_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, f->parent);
 
@@ -613,11 +614,14 @@ int main( int argc, char *argv[] ) {
 			}
             sl_peerinfo _socks5 = sl_peerinfo::nan();
             // Search for dns cache
-            if ( _g_service_config->a_records_cache.find(_orgnl.ipaddress) 
-                != end(_g_service_config->a_records_cache) ) {
+            if ( _g_service_config->is_ip_in_a_record_cache(_orgnl.ipaddress) ) {
                 _socks5 = _g_service_config->gateway_socks5;
             }
             SOCKET_T _rso = sl_tcp_socket_init();
+            if ( SOCKET_NOT_VALIDATE(_rso) ) {
+                lerror << "failed to initialize a tcp redirect socket" << lend;
+                return;
+            }
             if ( !sl_tcp_socket_connect(_rso, _socks5, _orgnl.ipaddress, _orgnl.port_number, [e](sl_event re) {
                 if ( re.event == SL_EVENT_FAILED ) {
                     sl_socket_close(e.so);
