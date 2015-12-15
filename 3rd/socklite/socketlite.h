@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc3
+// Current Version: 0.6-rc3-1-g4180f1c
 
 #pragma once
 // inc/thread.hpp
@@ -406,7 +406,7 @@ namespace cpputility {
 
         void start(cp_log_level lv, const string& logname) {
             setlogmask(LOG_UPTO(lv));
-            openlog(logname.c_str(), LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
+            openlog(logname.c_str(), LOG_CONS | LOG_PID | LOG_NDELAY, LOG_USER);
 
             log_to_sys = true;
             log_lv = lv;
@@ -425,10 +425,10 @@ namespace cpputility {
             string _logline;
             if ( log_to_sys == false ) {
                 cp_log_get_time(_logline);
-                _logline += "[";
-                _logline += cp_log_lv_to_string(lv);
-                _logline += "] ";
             }
+            _logline += "[";
+            _logline += cp_log_lv_to_string(lv);
+            _logline += "] ";
 
             va_list _va;
             va_start(_va, format);

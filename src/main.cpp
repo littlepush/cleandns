@@ -211,7 +211,7 @@ void clnd_udp_redirect_to_tcp(sl_event e, sl_event re, const string & incoming_p
 
 void tcp_redirect_callback(sl_event e, sl_event re) {
     if ( e.event == SL_EVENT_FAILED ) {
-        linfo << "socket has disconnected" << lend;
+        //linfo << "socket has disconnected" << lend;
         sl_socket_close(e.so);
         sl_socket_close(re.so);
         return;
