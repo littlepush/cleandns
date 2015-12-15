@@ -603,15 +603,15 @@ int main( int argc, char *argv[] ) {
                 lerror << "maybe this is a BSD system, which does not support SO_ORIGINAL_DST" << lend;
                 sl_socket_close(e.so);
                 return;
-            } else {
-				//sl_peerinfo _lpi(e.address.sin_addr.s_addr, ntohs(e.address.sin_port));
-				uint32_t _laddr, _lport;
-				network_peer_info_from_socket(e.so, _laddr, _lport);
-				sl_peerinfo _lpi(_laddr, _lport);
-				linfo 
-                    << "the incoming connection " << _lpi << " want to connect to " 
-                    << _orgnl << " via current gateway" << lend;
-			}
+            }
+			//sl_peerinfo _lpi(e.address.sin_addr.s_addr, ntohs(e.address.sin_port));
+			uint32_t _laddr, _lport;
+			network_peer_info_from_socket(e.so, _laddr, _lport);
+			sl_peerinfo _lpi(_laddr, _lport);
+			linfo 
+                << "the incoming connection " << _lpi << " want to connect to " 
+                << _orgnl << " via current gateway" << lend;
+
             sl_peerinfo _socks5 = sl_peerinfo::nan();
             // Search for dns cache
             if ( _g_service_config->is_ip_in_a_record_cache(_orgnl.ipaddress) ) {
@@ -622,6 +622,7 @@ int main( int argc, char *argv[] ) {
                 lerror << "failed to initialize a tcp redirect socket" << lend;
                 return;
             }
+			ldebug << "just create a redirect socket " << _rso << " for redirect the package from " << _lpi << lend;
             if ( !sl_tcp_socket_connect(_rso, _socks5, _orgnl.ipaddress, _orgnl.port_number, [e](sl_event re) {
                 if ( re.event == SL_EVENT_FAILED ) {
                     sl_socket_close(e.so);
