@@ -98,7 +98,7 @@ void clnd_get_local_filter(sl_event e, const string& incoming_pkg, lp_clnd_filte
     if ( _type == clnd_local_result_type_A ) {
         vector<uint32_t> _ARecords;
         for ( auto _ip : _lresult ) {
-            _ARecords.push_back(network_ipstring_to_inaddr(_ip));
+            _ARecords.push_back(ntohl(network_ipstring_to_inaddr(_ip)));
         }
         dns_generate_a_records_resp(
             incoming_pkg.c_str(), 
@@ -235,16 +235,22 @@ void tcp_redirect_callback(sl_event e, sl_event re) {
         sl_socket_close(re.so);
         return;
     }
-    if ( !sl_tcp_socket_send(re.so, _buf) ) {
-        sl_socket_close(e.so);
-        sl_socket_close(re.so);
-        return;
-    }
-    if ( !sl_tcp_socket_monitor(e.so, [re](sl_event e) {
-        tcp_redirect_callback(e, re);
+    if ( !sl_tcp_socket_send(re.so, _buf, [e](sl_event re){
+        if ( re.event == SL_EVENT_FAILED ) {
+            sl_socket_close(e.so);
+            sl_socket_close(re.so);
+            return;
+        }
+        if ( !sl_tcp_socket_monitor(e.so, [re](sl_event e) {
+            tcp_redirect_callback(e, re);
+        }) ) {
+            sl_socket_close(e.so);
+            sl_socket_close(re.so);
+        }        
     }) ) {
         sl_socket_close(e.so);
         sl_socket_close(re.so);
+        return;
     }
 }
 
@@ -589,14 +595,18 @@ int main( int argc, char *argv[] ) {
                     lp_clnd_filter _f = clnd_find_filter_by_name(_filter);
                     if ( !_f ) {
                         lerror << "no such filter in the list" << lend;
-                        sl_tcp_socket_send(e.so, "{\"errno\": 1,\"errmsg\":\"no such filter in the list\"}");
+                        sl_tcp_socket_send(e.so, "{\"errno\": 1,\"errmsg\":\"no such filter in the list\"}", [](sl_event e){
+                            sl_socket_close(e.so);
+                        });
                     } else if ( _f->mode != clnd_filter_mode_redirect ) {
                         ostringstream _oss;
                         _oss << "filter: " << _f->name << " is not a redirect filter, cannot add rule";
                         lerror << _oss.str() << lend;
                         ostringstream _msg;
                         _msg << "{\"errno\": 2,\"errmsg\":\"" << _oss.str() << "\"}";
-                        sl_tcp_socket_send(e.so, _msg.str());
+                        sl_tcp_socket_send(e.so, _msg.str(), [](sl_event e){
+                            sl_socket_close(e.so);
+                        });
                     } else {
                         shared_ptr<clnd_filter_redirect> _rf = dynamic_pointer_cast<clnd_filter_redirect>(_f);
                         if ( _cmd == "add_filter" ) {
@@ -604,10 +614,11 @@ int main( int argc, char *argv[] ) {
                         } else {
                             _rf->del_rule(_domain_rule);
                         }
-                        sl_tcp_socket_send(e.so, "{\"errno\":0}");
+                        sl_tcp_socket_send(e.so, "{\"errno\":0}", [](sl_event e){
+                            sl_socket_close(e.so);
+                        });
                     }
                 }
-                sl_socket_close(e.so);
             }, true) ) {
                 lerror << "failed to monitor on the new incoming socket: " << e.so << lend;
                 sl_socket_close(e.so);
