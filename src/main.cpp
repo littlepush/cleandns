@@ -146,31 +146,38 @@ void clnd_tcp_redirect_to_tcp(sl_event e, sl_event re, const string & incoming_p
         sl_socket_close(re.so);
         return;
     }
-    sl_tcp_socket_send(re.so, incoming_pkg);
-    sl_tcp_socket_monitor(re.so, [e, f](sl_event re){
+    sl_tcp_socket_send(re.so, incoming_pkg, [e, f](sl_event re) {
         if ( re.event == SL_EVENT_FAILED ) {
-            lerror << "failed to get response from " << f->parent << " for filter " << f->name << lend;
+            lerror << "failed to redirect dns packet to " << f->parent << lend;
             sl_socket_close(e.so);
             sl_socket_close(re.so);
             return;
         }
-        string _rbuf;
-        sl_tcp_socket_read(re.so, _rbuf);
-        if ( f->socks5 ) {
-            string _domain;
-            std::vector<uint32_t> _iplist;
-            dns_get_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, _domain, _iplist);
-            for ( auto ip : _iplist ) {
-                //_g_service_config->a_records_cache[ip] = true;
-                _g_service_config->add_a_record_cache(ip);
+        sl_tcp_socket_monitor(re.so, [e, f](sl_event re){
+            if ( re.event == SL_EVENT_FAILED ) {
+                lerror << "failed to get response from " << f->parent << " for filter " << f->name << lend;
+                sl_socket_close(e.so);
+                sl_socket_close(re.so);
+                return;
             }
-        }
-        clnd_dump_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, f->parent);
-        sl_tcp_socket_send(e.so, _rbuf);
+            string _rbuf;
+            sl_tcp_socket_read(re.so, _rbuf);
+            if ( f->socks5 ) {
+                string _domain;
+                std::vector<uint32_t> _iplist;
+                dns_get_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, _domain, _iplist);
+                for ( auto ip : _iplist ) {
+                    //_g_service_config->a_records_cache[ip] = true;
+                    _g_service_config->add_a_record_cache(ip);
+                }
+            }
+            clnd_dump_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, f->parent);
+            sl_tcp_socket_send(e.so, _rbuf);
 
-        // Release the socket resource
-        sl_socket_close(e.so);
-        sl_socket_close(re.so);
+            // Release the socket resource
+            sl_socket_close(e.so);
+            sl_socket_close(re.so);
+        });
     });
 }
 
@@ -183,29 +190,35 @@ void clnd_udp_redirect_to_tcp(sl_event e, sl_event re, const string & incoming_p
     ldebug << "connected to " << f->parent << " via socks5 proxy " << f->socks5 << lend;
     string _tincoming_pkg;
     dns_generate_tcp_redirect_packet(incoming_pkg, _tincoming_pkg);
-    sl_tcp_socket_send(re.so, _tincoming_pkg);
-    sl_tcp_socket_monitor(re.so, [e, f](sl_event re){
+    sl_tcp_socket_send(re.so, _tincoming_pkg, [e, f](sl_event re){
         if ( re.event == SL_EVENT_FAILED ) {
-            lerror << "failed to get response from " << f->parent << " for filter " << f->name << lend;
+            lerror << "failed to redirect dns packet to " << f->parent << lend;
             sl_socket_close(re.so);
             return;
         }
-        string _rbuf;
-        sl_tcp_socket_read(re.so, _rbuf);
-        string _domain;
-        std::vector<uint32_t> _iplist;
-        dns_get_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, _domain, _iplist);
-        for ( auto ip : _iplist ) {
-            _g_service_config->add_a_record_cache(ip);
-        }
-        clnd_dump_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, f->parent);
+        sl_tcp_socket_monitor(re.so, [e, f](sl_event re){
+            if ( re.event == SL_EVENT_FAILED ) {
+                lerror << "failed to get response from " << f->parent << " for filter " << f->name << lend;
+                sl_socket_close(re.so);
+                return;
+            }
+            string _rbuf;
+            sl_tcp_socket_read(re.so, _rbuf);
+            string _domain;
+            std::vector<uint32_t> _iplist;
+            dns_get_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, _domain, _iplist);
+            for ( auto ip : _iplist ) {
+                _g_service_config->add_a_record_cache(ip);
+            }
+            clnd_dump_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, f->parent);
 
-        string _urbuf;
-        dns_generate_udp_response_packet_from_tcp(_rbuf, _urbuf);
-        sl_udp_socket_send(e.so, _urbuf, sl_peerinfo(e.address.sin_addr.s_addr, ntohs(e.address.sin_port)));
+            string _urbuf;
+            dns_generate_udp_response_packet_from_tcp(_rbuf, _urbuf);
+            sl_udp_socket_send(e.so, _urbuf, sl_peerinfo(e.address.sin_addr.s_addr, ntohs(e.address.sin_port)));
 
-        // Release the socket resource
-        sl_socket_close(re.so);
+            // Release the socket resource
+            sl_socket_close(re.so);
+        });
     });
 }
 
