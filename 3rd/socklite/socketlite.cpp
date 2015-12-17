@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc3-1-g4180f1c
+// Current Version: 0.6-rc4
 
 #include "socketlite.h"
 // src/dns.cpp
@@ -29,16 +29,16 @@
 
 #ifdef SOCK_LITE_INTEGRATION_DNS
 
-bool clnd_dns_package::clnd_dns_support_recursive = true;
-uint16_t clnd_dns_package::clnd_dns_tid = 1;
+bool clnd_dns_packet::clnd_dns_support_recursive = true;
+uint16_t clnd_dns_packet::clnd_dns_tid = 1;
 
 // DNS Package class
-clnd_dns_package::clnd_dns_package( const char *data, uint16_t len )
+clnd_dns_packet::clnd_dns_packet( const char *data, uint16_t len )
 {
-    memcpy((void *)&transaction_id_, data, sizeof(clnd_dns_package));
+    memcpy((void *)&transaction_id_, data, sizeof(clnd_dns_packet));
 }
 
-clnd_dns_package::clnd_dns_package( bool is_query, dns_opcode opcode, uint16_t qd_count)
+clnd_dns_packet::clnd_dns_packet( bool is_query, dns_opcode opcode, uint16_t qd_count)
     : transaction_id_(clnd_dns_tid++), flags_(0), 
     qd_count_( htons(qd_count) ), 
     an_count_(0), ns_count_(0), ar_count_(0) 
@@ -60,12 +60,12 @@ clnd_dns_package::clnd_dns_package( bool is_query, dns_opcode opcode, uint16_t q
     flags_ = htons(_h_flag);
 };
 
-clnd_dns_package::clnd_dns_package( const clnd_dns_package &rhs )
+clnd_dns_packet::clnd_dns_packet( const clnd_dns_packet &rhs )
     : transaction_id_(rhs.transaction_id_), flags_(rhs.flags_),
     qd_count_(rhs.qd_count_), an_count_(rhs.an_count_),
     ns_count_(rhs.ns_count_), ar_count_(rhs.ar_count_) { }
 
-clnd_dns_package& clnd_dns_package::operator= (const clnd_dns_package &rhs )
+clnd_dns_packet& clnd_dns_packet::operator= (const clnd_dns_packet &rhs )
 {
     transaction_id_ = rhs.transaction_id_;
     flags_ = rhs.flags_;
@@ -75,13 +75,13 @@ clnd_dns_package& clnd_dns_package::operator= (const clnd_dns_package &rhs )
     ar_count_ = rhs.ar_count_;
     return *this;
 }
-size_t clnd_dns_package::size() const { return sizeof(uint16_t) * 5; }
-const char *const clnd_dns_package::pbuf() { return (char *)this; }
+size_t clnd_dns_packet::size() const { return sizeof(uint16_t) * 5; }
+const char *const clnd_dns_packet::pbuf() { return (char *)this; }
 
-clnd_dns_package * clnd_dns_package::dns_resp_package(string &buf, dns_rcode rcode, uint16_t ancount) const {
-    buf.resize(sizeof(clnd_dns_package));
-    //clnd_dns_package *_presp = new ((void*)&buf[0]) clnd_dns_package(*this);
-    clnd_dns_package *_presp = (clnd_dns_package *)&buf[0];
+clnd_dns_packet * clnd_dns_packet::dns_resp_packet(string &buf, dns_rcode rcode, uint16_t ancount) const {
+    buf.resize(sizeof(clnd_dns_packet));
+    //clnd_dns_packet *_presp = new ((void*)&buf[0]) clnd_dns_packet(*this);
+    clnd_dns_packet *_presp = (clnd_dns_packet *)&buf[0];
     *_presp = *this;
     uint16_t _h_flag = ntohs(flags_);
     // Query -> Response
@@ -94,9 +94,9 @@ clnd_dns_package * clnd_dns_package::dns_resp_package(string &buf, dns_rcode rco
     return _presp;
 }
 
-clnd_dns_package * clnd_dns_package::dns_truncation_package( string &buf ) const {
-    buf.resize(sizeof(clnd_dns_package));
-    clnd_dns_package *_presp = (clnd_dns_package *)&buf[0];
+clnd_dns_packet * clnd_dns_packet::dns_truncation_packet( string &buf ) const {
+    buf.resize(sizeof(clnd_dns_packet));
+    clnd_dns_packet *_presp = (clnd_dns_packet *)&buf[0];
     *_presp = *this;
     uint16_t _h_flag = ntohs(flags_);
     // Query -> Response
@@ -107,75 +107,75 @@ clnd_dns_package * clnd_dns_package::dns_truncation_package( string &buf ) const
     return _presp;
 }
 
-uint16_t clnd_dns_package::get_transaction_id() const 
+uint16_t clnd_dns_packet::get_transaction_id() const 
 {
     return ntohs(transaction_id_);
 }
-bool clnd_dns_package::get_is_query_request() const
+bool clnd_dns_packet::get_is_query_request() const
 {
     uint16_t _h_flag = ntohs(flags_);
     return (_h_flag & 0x8000) == 0;
 }
-bool clnd_dns_package::get_is_response_request() const
+bool clnd_dns_packet::get_is_response_request() const
 {
     uint16_t _h_flag = ntohs(flags_);
     return (_h_flag & 0x8000) > 0;
 }
-dns_opcode clnd_dns_package::get_opcode() const
+dns_opcode clnd_dns_packet::get_opcode() const
 {
     uint16_t _h_flag = ntohs(flags_);
     return (dns_opcode)((_h_flag >>= 13) & 0x000F);
 }
-bool clnd_dns_package::get_is_authoritative() const
+bool clnd_dns_packet::get_is_authoritative() const
 {
     uint16_t _h_flag = ntohs(flags_);
     return (_h_flag & 0x0400) > 0;
 }
-void clnd_dns_package::set_is_authoritative(bool auth)
+void clnd_dns_packet::set_is_authoritative(bool auth)
 {
     uint16_t _h_flag = ntohs(flags_);
     _h_flag |= 0x0400;
     flags_ = htons(_h_flag);
 }
-bool clnd_dns_package::get_is_truncation() const
+bool clnd_dns_packet::get_is_truncation() const
 {
     uint16_t _h_flag = ntohs(flags_);
     return (_h_flag & 0x0200) > 0;
 }
-bool clnd_dns_package::get_is_recursive_desired() const
+bool clnd_dns_packet::get_is_recursive_desired() const
 {
     uint16_t _h_flag = ntohs(flags_);
     return (_h_flag & 0x0100) > 0;
 }
-void clnd_dns_package::set_is_recursive_desired(bool rd)
+void clnd_dns_packet::set_is_recursive_desired(bool rd)
 {
     uint16_t _h_flag = ntohs(flags_);
     _h_flag |= 0x0100;
     flags_ = htons(_h_flag);
 }
-bool clnd_dns_package::get_is_recursive_available() const
+bool clnd_dns_packet::get_is_recursive_available() const
 {
     uint16_t _h_flag = ntohs(flags_);
     return (_h_flag & 0x0080) > 0;
 }
-dns_rcode clnd_dns_package::get_resp_code() const
+dns_rcode clnd_dns_packet::get_resp_code() const
 {
     uint16_t _h_flag = ntohs(flags_);
     return (dns_rcode)(_h_flag & 0x000F);
 }
-uint16_t clnd_dns_package::get_qd_count() const
+uint16_t clnd_dns_packet::get_qd_count() const
 {
     return ntohs(qd_count_);
 }
-uint16_t clnd_dns_package::get_an_count() const
+uint16_t clnd_dns_packet::get_an_count() const
 {
     return ntohs(an_count_);
 }
-uint16_t clnd_dns_package::get_ns_count() const
+uint16_t clnd_dns_packet::get_ns_count() const
 {
     return ntohs(ns_count_);
 }
-uint16_t clnd_dns_package::get_ar_count() const
+uint16_t clnd_dns_packet::get_ar_count() const
 {
     return ntohs(ar_count_);
 }
@@ -209,7 +209,7 @@ int _dns_get_format_domain( const char *data, string &domain ) {
     return domain.size() + 2;
 }
 
-int _dns_get_format_domain( const char *begin_of_domain, const char *begin_of_pkg, string &domain ) {
+int _dns_get_format_domain( const char *begin_of_domain, const char *begin_of_pkt, string &domain ) {
     domain.clear();
     int _readsize = 0;
     for ( ;; ) {
@@ -228,7 +228,7 @@ int _dns_get_format_domain( const char *begin_of_domain, const char *begin_of_pk
                 _offset = (uint16_t)(_l & 0x3F);
                 _readsize += 1;
             }
-            _dns_get_format_domain(begin_of_pkg + _offset, _reset_domain);
+            _dns_get_format_domain(begin_of_pkt + _offset, _reset_domain);
             domain += _reset_domain;
             break;
         } else {
@@ -241,31 +241,31 @@ int _dns_get_format_domain( const char *begin_of_domain, const char *begin_of_pk
     return _readsize;
 }
 
-// Get the domain from the dns querying package.
+// Get the domain from the dns querying packet.
 // The query domain seg will store the domain in the following format:
 // [length:1Byte][component][length:1Byte][component]...
-int dns_get_domain( const char *pkg, unsigned int len, std::string &domain )
+int dns_get_domain( const char *pkt, unsigned int len, std::string &domain )
 {
-    // the package is too small
-    if ( len < sizeof(clnd_dns_package) ) return -1;
-    const char *_pDomain = pkg + sizeof(clnd_dns_package);
+    // the packet is too small
+    if ( len < sizeof(clnd_dns_packet) ) return -1;
+    const char *_pDomain = pkt + sizeof(clnd_dns_packet);
     _dns_get_format_domain(_pDomain, domain);
     return 0;
 }
 
-int dns_generate_query_package( const string &query_name, string& buffer, dns_qtype qtype ) 
+int dns_generate_query_packet( const string &query_name, string& buffer, dns_qtype qtype ) 
 {
     string _fdomain;
     _dns_format_domain(query_name, _fdomain);
 
     // Buffer
-    buffer.resize(sizeof(clnd_dns_package) + _fdomain.size() + 2 * sizeof(uint8_t) + 2 * sizeof(uint8_t));
+    buffer.resize(sizeof(clnd_dns_packet) + _fdomain.size() + 2 * sizeof(uint8_t) + 2 * sizeof(uint8_t));
     // Header
-    //clnd_dns_package *_pquery = (clnd_dns_package*)&buffer[0]);
-    clnd_dns_package _query_pkg;
-    memcpy(&buffer[0], _query_pkg.pbuf(), _query_pkg.size());
+    //clnd_dns_packet *_pquery = (clnd_dns_packet*)&buffer[0]);
+    clnd_dns_packet _query_pkt;
+    memcpy(&buffer[0], _query_pkt.pbuf(), _query_pkt.size());
     // Domain
-    char *_data_area = (char *)&buffer[0] + sizeof(clnd_dns_package);
+    char *_data_area = (char *)&buffer[0] + sizeof(clnd_dns_packet);
     memcpy(_data_area, _fdomain.c_str(), _fdomain.size());
     // Flags
     _data_area += _fdomain.size();
@@ -275,50 +275,50 @@ int dns_generate_query_package( const string &query_name, string& buffer, dns_qt
     return buffer.size();
 }
 
-int dns_generate_tc_package( const string& incoming_pkg, string& buffer ) 
+int dns_generate_tc_packet( const string& incoming_pkt, string& buffer ) 
 {
-    clnd_dns_package _ipkg(incoming_pkg.c_str(), sizeof(clnd_dns_package));
-    _ipkg.dns_truncation_package(buffer);
-    buffer.resize(incoming_pkg.size());
-    memcpy((char *)&buffer[0] + sizeof(clnd_dns_package), 
-        incoming_pkg.c_str() + sizeof(clnd_dns_package),
-        incoming_pkg.size() - sizeof(clnd_dns_package));
+    clnd_dns_packet _ipkt(incoming_pkt.c_str(), sizeof(clnd_dns_packet));
+    _ipkt.dns_truncation_packet(buffer);
+    buffer.resize(incoming_pkt.size());
+    memcpy((char *)&buffer[0] + sizeof(clnd_dns_packet), 
+        incoming_pkt.c_str() + sizeof(clnd_dns_packet),
+        incoming_pkt.size() - sizeof(clnd_dns_packet));
     return buffer.size();
 }
 
-int dns_generate_tcp_redirect_package( const string &incoming_pkg, string &buffer )
+int dns_generate_tcp_redirect_packet( const string &incoming_pkt, string &buffer )
 {
-    buffer.resize(incoming_pkg.size() + sizeof(uint16_t));
+    buffer.resize(incoming_pkt.size() + sizeof(uint16_t));
     uint16_t *_plen = (uint16_t *)&buffer[0];
-    *_plen = htons(incoming_pkg.size());
-    memcpy((char *)&buffer[2], incoming_pkg.c_str(), incoming_pkg.size());
+    *_plen = htons(incoming_pkt.size());
+    memcpy((char *)&buffer[2], incoming_pkt.c_str(), incoming_pkt.size());
     return buffer.size();
 }
 
-int dns_generate_udp_response_package_from_tcp( const string &incoming_pkg, string &buffer )
+int dns_generate_udp_response_packet_from_tcp( const string &incoming_pkt, string &buffer )
 {
-    buffer.resize(incoming_pkg.size() - sizeof(uint16_t));
-    memcpy((char *)&buffer[0], incoming_pkg.c_str() + sizeof(uint16_t), incoming_pkg.size() - sizeof(uint16_t));
+    buffer.resize(incoming_pkt.size() - sizeof(uint16_t));
+    memcpy((char *)&buffer[0], incoming_pkt.c_str() + sizeof(uint16_t), incoming_pkt.size() - sizeof(uint16_t));
     return buffer.size();
 }
 
-void dns_generate_a_records_resp( const char *pkg, unsigned int len, vector<uint32_t> ipaddress, string &buf )
+void dns_generate_a_records_resp( const char *pkt, unsigned int len, vector<uint32_t> ipaddress, string &buf )
 {
     // Resp Header
-    clnd_dns_package _ipkg(pkg, len);
-    _ipkg.dns_resp_package(buf, dns_rcode_noerr, (uint16_t)ipaddress.size());
+    clnd_dns_packet _ipkt(pkt, len);
+    _ipkt.dns_resp_packet(buf, dns_rcode_noerr, (uint16_t)ipaddress.size());
 
-    // All length: incoming package(header + query domain) + 2bytes domain-name(offset to query domain) + 
+    // All length: incoming packet(header + query domain) + 2bytes domain-name(offset to query domain) + 
     // 2 bytes type(A) + 2 bytes class(IN) + 4 bytes(TTL) + 2bytes(r-length) + 4bytes(r-data, ipaddr)
     buf.resize( len + (2 + 2 + 2 + 4 + 2 + 4) * ipaddress.size() );
     // Query Domain
     memcpy(
-        &buf[0] + sizeof(clnd_dns_package), 
-        pkg + sizeof(clnd_dns_package),
-        len - sizeof(clnd_dns_package)
+        &buf[0] + sizeof(clnd_dns_packet), 
+        pkt + sizeof(clnd_dns_packet),
+        len - sizeof(clnd_dns_packet)
         );
     // Offset
-    uint16_t _name_offset = sizeof(clnd_dns_package);
+    uint16_t _name_offset = sizeof(clnd_dns_packet);
     _name_offset |= 0xC000;
     _name_offset = htons(_name_offset);
     // Generate the RR
@@ -356,39 +356,39 @@ void dns_generate_a_records_resp( const char *pkg, unsigned int len, vector<uint
     }
 }
 
-// Generate response package for specified query domain
+// Generate response packet for specified query domain
 void dns_generate_a_records_resp( 
     const string &query_domain, 
     uint16_t trans_id, 
     const vector<uint32_t> & iplist, 
     string &buf )
 {
-    string _query_pkg;
-    dns_generate_query_package(query_domain, _query_pkg);
-    clnd_dns_package *_pkg = (clnd_dns_package *)&_query_pkg[0];
-    uint16_t* _ptid = (uint16_t *)_pkg;
+    string _query_pkt;
+    dns_generate_query_packet(query_domain, _query_pkt);
+    clnd_dns_packet *_pkt = (clnd_dns_packet *)&_query_pkt[0];
+    uint16_t* _ptid = (uint16_t *)_pkt;
     *_ptid = htons(trans_id);
-    dns_generate_a_records_resp(_query_pkg.c_str(), _query_pkg.size(), iplist, buf);
+    dns_generate_a_records_resp(_query_pkt.c_str(), _query_pkt.size(), iplist, buf);
 }
 
-void dns_gnerate_cname_records_resp( const char *pkg, unsigned int len, vector<string> cnamelist, string &buf )
+void dns_gnerate_cname_records_resp( const char *pkt, unsigned int len, vector<string> cnamelist, string &buf )
 {
     // Resp Header
-    clnd_dns_package _ipkg(pkg, len);
-    _ipkg.dns_resp_package(buf, dns_rcode_noerr, (uint16_t)cnamelist.size());
+    clnd_dns_packet _ipkt(pkt, len);
+    _ipkt.dns_resp_packet(buf, dns_rcode_noerr, (uint16_t)cnamelist.size());
 
-    // All length: incoming package(header + query domain) + 2bytes domain-name(offset to query domain) + 
+    // All length: incoming packet(header + query domain) + 2bytes domain-name(offset to query domain) + 
     // 2 bytes type(CName) + 2 bytes class(IN) + 4 bytes(TTL) + 2bytes(r-length) + r-length bytes(r-data, cname)
     //buf.resize( len + (2 + 2 + 2 + 4 + 2 + 4) * cnamelist.size() );
     buf.resize(len);
     // Query Domain
     memcpy(
-        &buf[0] + sizeof(clnd_dns_package), 
-        pkg + sizeof(clnd_dns_package),
-        len - sizeof(clnd_dns_package)
+        &buf[0] + sizeof(clnd_dns_packet), 
+        pkt + sizeof(clnd_dns_packet),
+        len - sizeof(clnd_dns_packet)
         );
     // Offset
-    uint16_t _name_offset = sizeof(clnd_dns_package);
+    uint16_t _name_offset = sizeof(clnd_dns_packet);
     _name_offset |= 0xC000;
     _name_offset = htons(_name_offset);
     // Generate the RR
@@ -429,18 +429,18 @@ void dns_gnerate_cname_records_resp( const char *pkg, unsigned int len, vector<s
     }
 }
 
-void dns_get_a_records( const char *pkg, unsigned int len, string &qdomain, vector<uint32_t> &a_records )
+void dns_get_a_records( const char *pkt, unsigned int len, string &qdomain, vector<uint32_t> &a_records )
 {
-    clnd_dns_package *_pheader = (clnd_dns_package *)pkg;
-    const char *_pDomain = pkg + sizeof(clnd_dns_package);
-    int _readsize = _dns_get_format_domain(_pDomain, pkg, qdomain);
+    clnd_dns_packet *_pheader = (clnd_dns_packet *)pkt;
+    const char *_pDomain = pkt + sizeof(clnd_dns_packet);
+    int _readsize = _dns_get_format_domain(_pDomain, pkt, qdomain);
 
     // Begin Answer Point
-    const char *_pbuf = pkg + sizeof(clnd_dns_package) + _readsize + 2 + 2; // type + class
+    const char *_pbuf = pkt + sizeof(clnd_dns_packet) + _readsize + 2 + 2; // type + class
     uint16_t _an_count = _pheader->get_an_count();
     for ( uint16_t i = 0; i < _an_count; ++i ) {
         string _adomain;
-        int _asize = _dns_get_format_domain(_pbuf, pkg, _adomain);
+        int _asize = _dns_get_format_domain(_pbuf, pkt, _adomain);
         _pbuf += _asize;
 
         uint16_t _type = ntohs(*(uint16_t *)_pbuf);
@@ -464,9 +464,9 @@ void dns_get_a_records( const char *pkg, unsigned int len, string &qdomain, vect
 }
 
 // Check if is a query request
-bool dns_is_query(const char *pkg, unsigned int len)
+bool dns_is_query(const char *pkt, unsigned int len)
 {
-    clnd_dns_package *_pheader = (clnd_dns_package *)pkg;
+    clnd_dns_packet *_pheader = (clnd_dns_packet *)pkt;
     return _pheader->get_is_query_request();
 }
 
@@ -776,6 +776,87 @@ ostream & operator << (ostream &os, const sl_peerinfo &peer) {
     return os;
 }
 
+/*
+IP Range, x.x.x.x/n
+*/
+void sl_iprange::parse_range_from_string(const string &format_string)
+{
+    // This is invalidate range
+    low_ = high_ = (uint32_t)-1;
+
+    size_t _slash_pos = format_string.find('/');
+    string _ipstr, _maskstr;
+    if ( _slash_pos == string::npos ) {
+        _ipstr = format_string;
+        _maskstr = "32";
+    } else {
+        _ipstr = format_string.substr(0, _slash_pos);
+        _maskstr = format_string.substr(_slash_pos + 1);
+    }
+
+    sl_ip _lowip(_ipstr);
+    if ( (uint32_t)_lowip == 0 ) return;  // Invalidate 
+
+    // Mask part
+    if ( _maskstr.size() > 2 ) {
+        sl_ip _highip(_maskstr);
+        if ( (uint32_t)_highip == 0 ) return;     // Invalidate Second Part
+        if ( _highip < _lowip ) return; // Invalidate order of the range
+        low_ = _lowip;
+        high_ = _highip;
+    } else {
+        uint32_t _mask = stoi(_maskstr, nullptr, 10);
+        if ( _mask > 32 ) return;
+        uint32_t _fmask = 0xFFFFFFFF;
+        _fmask <<= (32 - _mask);
+        low_ = ntohl(_lowip) & _fmask;
+        high_ = low_ | (~_fmask);
+        low_ = htonl(low_);
+        high_ = htonl(high_);
+    }
+}
+sl_iprange::sl_iprange() : low_((uint32_t)-1), high_((uint32_t)-1){ }
+sl_iprange::sl_iprange(const string & format_string) {
+    this->parse_range_from_string(format_string);
+}
+sl_iprange::sl_iprange(uint32_t low, uint32_t high) : low_(low), high_(high) {
+    if ( ntohl(high_) < ntohl(low_) ) {
+        low_ = high_ = (uint32_t)-1;
+    }
+}
+sl_iprange::sl_iprange(const sl_iprange &rhs) : low_(rhs.low_), high_(rhs.high_) { }
+sl_iprange & sl_iprange::operator = (const sl_iprange & rhs) {
+    low_ = rhs.low_;
+    high_ = rhs.high_;
+    return *this;
+}
+sl_iprange & sl_iprange::operator = (const string & format_string) {
+    this->parse_range_from_string(format_string);
+    return *this;
+}
+
+sl_iprange::operator const string() const {
+    string _lowstr = sl_ip(low_);
+    string _highstr = sl_ip(high_);
+    return _lowstr + " - " + _highstr;
+}
+bool sl_iprange::is_ip_in_range(const sl_ip& ip) {
+    uint32_t _ip = ntohl(ip);
+    uint32_t _low = ntohl(low_);
+    uint32_t _high = ntohl(high_);
+    return _ip >= _low && _ip <= _high;
+    //return ip >= sl_ip(low_) && ip <= sl_ip(high_);
+}
+sl_iprange::operator bool() const {
+    return low_ != (uint32_t)-1 && high_ != (uint32_t)-1;
+}
+
+// Output the ip range
+ostream & operator << (ostream &os, const sl_iprange &range) {
+    os << range.operator const string();
+    return os;
+}
+
 sl_socket::sl_socket(bool iswrapper) : m_iswrapper(iswrapper), m_is_listening(false), m_socket(INVALIDATE_SOCKET) { }
 
 // Virtual destructure
@@ -1037,7 +1118,7 @@ size_t sl_poller::fetch_events( sl_poller::earray &events, unsigned int timedout
 #elif SL_TARGET_MAC
 			_e.so = _pe->ident;
 #endif
-			ldebug << "get event for socket: " << _e.so << lend;
+			//ldebug << "get event for socket: " << _e.so << lend;
 			int _error = 0, _len = sizeof(int);
 			getsockopt( _e.so, SOL_SOCKET, SO_ERROR, 
 					(char *)&_error, (socklen_t *)&_len);
@@ -1054,7 +1135,7 @@ size_t sl_poller::fetch_events( sl_poller::earray &events, unsigned int timedout
 				_e.event = SL_EVENT_FAILED;
 			}
 
-			ldebug << "did get r/w event for socket: " << _e.so << ", event: " << _e.event << lend;
+			//ldebug << "did get r/w event for socket: " << _e.so << ", event: " << _e.event << lend;
 			
             int _type;
 			getsockopt( _e.so, SOL_SOCKET, SO_TYPE,
@@ -1140,55 +1221,11 @@ static const int __sl_bitorder[32] = {
 // Get the index of the last bit which is 1
 #define SL_MACRO_LAST_1_INDEX(x)     (__sl_bitorder[((unsigned int)(((x) & -(x)) * 0x04653ADFU)) >> 27])
 
-std::map<SOCKET_T, sl_handler_set> & _sl_event_map() {
-    static std::map<SOCKET_T, sl_handler_set> _g_emap;
-    return _g_emap;
-}
-
-mutex & _sl_event_mutex() {
-    static mutex _egm;
-    return _egm;
-}
-
-sl_handler_set sl_event_empty_handler()
-{
+sl_handler_set sl_events::empty_handler() {
     sl_handler_set _s;
     memset((void *)&_s, 0, sizeof(sl_handler_set));
     return _s;
 }
-
-// Bind the event handler set
-void sl_event_bind_handler(SOCKET_T so, sl_handler_set&& hset)
-{
-    lock_guard<mutex> _(_sl_event_mutex());
-    _sl_event_map()[so] = hset;
-}
-// Unbind the event handler set
-void sl_event_unbind_handler(SOCKET_T so)
-{
-    lock_guard<mutex> _(_sl_event_mutex());
-    _sl_event_map().erase(so);
-}
-// Search for the handler set
-sl_handler_set sl_event_find_handler(SOCKET_T so)
-{
-    lock_guard<mutex> _(_sl_event_mutex());
-    if ( _sl_event_map().find(so) == end(_sl_event_map()) ) {
-        return sl_event_empty_handler();
-    }
-    return _sl_event_map()[so];
-}
-// Update the handler for specifial event
-void sl_event_update_handler(SOCKET_T so, SL_EVENT_ID eid, sl_socket_event_handler&& h)
-{
-    if ( eid == 0 ) return;
-    if ( eid & 0xFFFFFFE0 ) return; // Invalidate event flag
-    lock_guard<mutex> _(_sl_event_mutex());
-    auto _hit = _sl_event_map().find(so);
-    if ( _hit == end(_sl_event_map()) ) return;
-    (&_hit->second.on_accept)[SL_MACRO_LAST_1_INDEX(eid)] = h;
-}
-
 // sl_events member functions
 sl_events::sl_events()
 : timepiece_(10), rl_callback_(NULL), is_running_(false)
@@ -1236,10 +1273,9 @@ void sl_events::_internal_start_runloop()
 
 void sl_events::_internal_runloop()
 {
-    ldebug << "internal runloop thread id " << this_thread::get_id() << lend;
     thread_agent _ta;
 
-    ldebug << "internal runloop started" << lend;
+    //ldebug << "internal runloop started" << lend;
     while ( this_thread_is_running() ) {
         //ldebug << "runloop is still running" << lend;
         sl_poller::earray _event_list;
@@ -1252,19 +1288,8 @@ void sl_events::_internal_runloop()
             _fp = rl_callback_;
         } while(false);
 
-        do {
-            lock_guard<mutex> _(events_lock_);
-            //ldebug << "copy the pending event list" << lend;
-            _event_list = move(pending_events_);
-        } while(false);
-
-        // Force the fetch method to return immediately if have some pending events
-        if ( _event_list.size() > 0 ) {
-            _tp = 0;
-        }
-
         //ldebug << "current pending events: " << _event_list.size() << lend;
-        size_t _ecount = sl_poller::server().fetch_events(_event_list, _tp) + _event_list.size();
+        size_t _ecount = sl_poller::server().fetch_events(_event_list, _tp);
         if ( _ecount != 0 ) {
             //ldebug << "fetch some events, will process them" << lend;
             for ( auto &e : _event_list ) {
@@ -1320,56 +1345,71 @@ void sl_events::_internal_worker()
                             (_local_event.so == _local_event.source) && 
                             (_local_event.socktype == IPPROTO_UDP)) ?
                             SL_EVENT_ACCEPT : _local_event.event;
-        ldebug << "processing socket " << _s << " for event " << _e << lend;
-        sl_handler_set _hs = sl_event_find_handler(_s);
+        //ldebug << "processing socket " << _s << " for event " << _e << lend;
+        sl_handler_set _hs = this->_find_handler(_s);
         // Remove current event handler
         if ( _e != SL_EVENT_ACCEPT ) {
-            sl_event_bind_handler(_local_event.so, move(sl_event_empty_handler()));
+            //this->bind(_local_event.so, move(sl_events::empty_handler()));
+            this->update_handler(_local_event.so, _e, NULL);
         }
         sl_socket_event_handler _seh = (&_hs.on_accept)[SL_MACRO_LAST_1_INDEX(_e)];
-        if ( !_seh ) {
-            lwarning << "No handler bind for event: " << 
-                _e << " on socket " << _s << lend;
-        } else {
+        // if ( !_seh ) {
+        //     lnotice << "No handler bind for event: " << 
+        //         _e << " on socket " << _s << lend;
+        // } else {
+        //     _seh(_local_event);
+        // }
+        if ( _seh ) {
             _seh(_local_event);
         }
     }
+
+    linfo << "the worker " << this_thread::get_id() << " will exit" << lend;
 }
 
 unsigned int sl_events::pending_socket_count()
 {
-    lock_guard<mutex> _(events_lock_);
     return events_pool_.size();
 }
 
-void sl_events::bind(sl_socket *pso, sl_handler_set&& hset) {
-    if ( pso == NULL || SOCKET_NOT_VALIDATE(pso->m_socket) ) return;
-    sl_event_bind_handler(pso->m_socket, move(hset));
-}
-
-void sl_events::unbind( sl_socket *pso ) {
-    if ( pso == NULL || SOCKET_NOT_VALIDATE(pso->m_socket) ) return;
-    sl_event_unbind_handler(pso->m_socket);
-}
-void sl_events::update_handler(sl_socket *pso, SL_EVENT_ID eid, sl_socket_event_handler&& h)
-{
-    if ( pso == NULL || SOCKET_NOT_VALIDATE(pso->m_socket) ) return;
-    sl_event_update_handler(pso->m_socket, eid, move(h));
-}
 void sl_events::bind( SOCKET_T so, sl_handler_set&& hset )
 {
     if ( SOCKET_NOT_VALIDATE(so) ) return;
-    sl_event_bind_handler(so, move(hset));
+    lock_guard<mutex> _(handler_mutex_);
+    event_map_.emplace(so, move(hset));
 }
 void sl_events::unbind( SOCKET_T so )
 {
     if ( SOCKET_NOT_VALIDATE(so) ) return;
-    sl_event_unbind_handler(so);
+    lock_guard<mutex> _(handler_mutex_);
+    event_map_.erase(so);
 }
 void sl_events::update_handler( SOCKET_T so, SL_EVENT_ID eid, sl_socket_event_handler&& h)
 {
     if ( SOCKET_NOT_VALIDATE(so) ) return;
-    sl_event_update_handler(so, eid, move(h));
+    if ( eid == 0 ) return;
+    if ( eid & 0xFFFFFFE0 ) return; // Invalidate event flag
+    lock_guard<mutex> _(handler_mutex_);
+    auto _hit = event_map_.find(so);
+    if ( _hit == end(event_map_) ) return;
+    (&_hit->second.on_accept)[SL_MACRO_LAST_1_INDEX(eid)] = h;
+}
+bool sl_events::has_handler(SOCKET_T so, SL_EVENT_ID eid)
+{
+    if ( SOCKET_NOT_VALIDATE(so) ) return false;
+    if ( eid == 0 ) return false;
+    if ( eid & 0xFFFFFFE0 ) return false;
+    lock_guard<mutex> _(handler_mutex_);
+    auto _hit = event_map_.find(so);
+    if ( _hit == end(event_map_) ) return false;
+    sl_socket_event_handler _seh = (&_hit->second.on_accept)[SL_MACRO_LAST_1_INDEX(eid)];
+    return (bool)_seh;
+}
+sl_handler_set sl_events::_find_handler(SOCKET_T so) {
+    lock_guard<mutex> _(handler_mutex_);
+    auto _hit = event_map_.find(so);
+    if ( _hit == end(event_map_) ) return sl_events::empty_handler();
+    return _hit->second;
 }
 
 bool sl_events::is_running() const
@@ -1389,25 +1429,29 @@ void sl_events::run(uint32_t timepiece, sl_runloop_callback cb)
 
 void sl_events::stop_run()
 {
-    do {
-        lock_guard<mutex> _(running_lock_);
-        if ( is_running_ == false ) return;
-    } while ( false );
+    // do {
+    //     lock_guard<mutex> _(running_lock_);
+    //     if ( is_running_ == false ) return;
+    // } while ( false );
 
-    if ( runloop_thread_->joinable() )  {
+    if ( runloop_thread_ != NULL && runloop_thread_->joinable() )  {
         safe_join_thread(runloop_thread_->get_id());
         runloop_thread_->join();
     }
-    delete runloop_thread_;
-    runloop_thread_ = NULL;
+    if ( runloop_thread_ != NULL ) {
+        delete runloop_thread_;
+        runloop_thread_ = NULL;
+    }
 
     // Close the thread pool manager
-    if ( thread_pool_manager_->joinable() ) {
+    if ( thread_pool_manager_ != NULL && thread_pool_manager_->joinable() ) {
         safe_join_thread(thread_pool_manager_->get_id());
         thread_pool_manager_->join();
     }
-    delete thread_pool_manager_;
-    thread_pool_manager_ = NULL;
+    if ( thread_pool_manager_ != NULL ) {
+        delete thread_pool_manager_;
+        thread_pool_manager_ = NULL;
+    }
 
     // Close all worker in thread pool
     while ( thread_pool_.size() > 0 ) {
@@ -1417,29 +1461,29 @@ void sl_events::stop_run()
 
 void sl_events::add_event(sl_event && e)
 {
-    lock_guard<mutex> _(events_lock_);
-    pending_events_.emplace_back(e);
+    //lock_guard<mutex> _(events_lock_);
+    events_pool_.notify_one(move(e));
 }
 void sl_events::add_tcpevent(SOCKET_T so, SL_EVENT_ID eid)
 {
-    lock_guard<mutex> _(events_lock_);
+    //lock_guard<mutex> _(events_lock_);
     sl_event _e;
     _e.so = so;
     _e.source = INVALIDATE_SOCKET;
     _e.event = eid;
     _e.socktype = IPPROTO_TCP;
-    pending_events_.emplace_back(move(_e));
+    events_pool_.notify_one(move(_e));
 }
 void sl_events::add_udpevent(SOCKET_T so, struct sockaddr_in addr, SL_EVENT_ID eid)
 {
-    lock_guard<mutex> _(events_lock_);
+    //lock_guard<mutex> _(events_lock_);
     sl_event _e;
     _e.so = so;
     _e.source = INVALIDATE_SOCKET;
     _e.event = eid;
     _e.socktype = IPPROTO_UDP;
     memcpy(&_e.address, &addr, sizeof(addr));
-    pending_events_.emplace_back(move(_e));
+    events_pool_.notify_one(move(_e));
 }
 
 // events.h
@@ -1473,7 +1517,7 @@ sl_methods sl_socks5_handshake_handler(SOCKET_T so) {
 	sl_tcpsocket _wsrc(so);
 	string _buffer;
 
-	// Try to read the handshake package
+	// Try to read the handshake packet
 	if ( (_wsrc.read_data(_buffer) & SO_READ_DONE) == 0 ) return sl_method_nomethod;
 	sl_socks5_handshake_request *_req = (sl_socks5_handshake_request *)_buffer.data();
 	sl_socks5_handshake_response _resp(sl_method_nomethod);
@@ -1591,12 +1635,37 @@ void sl_socks5_did_connect_to_peer(SOCKET_T so, uint32_t addr, uint16_t port) {
 #include <linux/netfilter_ipv4.h>
 #endif
 
+#include <queue>
+
+typedef struct sl_write_packet {
+    string                          packet;
+    size_t                          sent_size;
+    sl_socket_event_handler         callback;
+} sl_write_packet;
+
+typedef shared_ptr<sl_write_packet>                sl_shared_write_pakcage;
+
+typedef struct sl_write_info {
+    shared_ptr< mutex >                             locker;
+    shared_ptr< queue<sl_shared_write_pakcage> >    packet_queue;
+} sl_write_info;
+
+typedef map< SOCKET_T, sl_write_info >              sl_write_map_t;
+
+mutex               _g_so_write_mutex;
+sl_write_map_t      _g_so_write_map;
+
 void sl_socket_close(SOCKET_T so)
 {
     if ( SOCKET_NOT_VALIDATE(so) ) return;
     //sl_event_unbind_handler(so);
     ldebug << "the socket " << so << " will be unbind and closed" << lend;
     sl_events::server().unbind(so);
+    do {
+        lock_guard<mutex> _(_g_so_write_mutex);
+        _g_so_write_map.erase(so);
+    } while(false);
+
     close(so);
 }
 
@@ -1635,7 +1704,13 @@ SOCKET_T sl_tcp_socket_init()
         return INVALIDATE_SOCKET;
     }
 
-    sl_events::server().bind(_so, sl_event_empty_handler());
+    sl_events::server().bind(_so, sl_events::empty_handler());
+    // Add A Write Buffer
+    sl_write_info _wi = { make_shared<mutex>(), make_shared< queue<sl_shared_write_pakcage> >() };
+    do {
+        lock_guard<mutex> _(_g_so_write_mutex);
+        _g_so_write_map[_so] = _wi;
+    } while(false);
     return _so;
 }
 bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& peer, sl_socket_event_handler callback)
@@ -1670,7 +1745,7 @@ bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& peer, sl_socket_even
             return false;
         } else {
             // Monitor the socket, the poller will invoke on_connect when the socket is connected or failed.
-            ldebug << "monitor tcp socket " << tso << " for connecting" << lend;
+            //ldebug << "monitor tcp socket " << tso << " for connecting" << lend;
             if ( !sl_poller::server().monitor_socket(tso, true, SL_EVENT_CONNECT) ) {
                 //sl_events::server().add_tcpevent(tso, SL_EVENT_FAILED);
                 return false;
@@ -1685,10 +1760,10 @@ bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& peer, sl_socket_even
 bool sl_tcp_socket_connect(SOCKET_T tso, const vector<sl_ip> &iplist, uint16_t port, uint32_t index, sl_socket_event_handler callback) {
     bool _retval = true;
     do {
-        ldebug << "iplist count: " << iplist.size() << ", current index: " << index << lend;
+        //ldebug << "iplist count: " << iplist.size() << ", current index: " << index << lend;
         if ( iplist.size() <= index ) return false;
         sl_peerinfo _pi((const string &)iplist[index], port);
-        ldebug << "try to connect to " << _pi << ", this is the " << index << " item in iplist" << lend;
+        //ldebug << "try to connect to " << _pi << ", this is the " << index << " item in iplist" << lend;
         _retval = sl_tcp_socket_connect(tso, sl_peerinfo((const string &)iplist[index], port), [iplist, port, index, callback](sl_event e) {
             if ( e.event == SL_EVENT_FAILED ) {
                 // go to next
@@ -1708,7 +1783,7 @@ bool sl_tcp_socket_connect(SOCKET_T tso, const vector<sl_ip> &iplist, uint16_t p
 bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& socks5, const string& host, uint16_t port, sl_socket_event_handler callback)
 {
     if ( socks5 ) {
-        ldebug << "try to connect via a socks5 proxy: " << socks5 << lend;
+        //ldebug << "try to connect via a socks5 proxy: " << socks5 << lend;
         return ( sl_tcp_socket_connect(tso, socks5, [socks5, host, port, callback](sl_event e){
             if ( e.event == SL_EVENT_FAILED ) {
                 lerror << "the socks5 proxy cannot be connected" << socks5 << lend;
@@ -1724,11 +1799,11 @@ bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& socks5, const string
                 if ( e.event == SL_EVENT_FAILED ) {
                     callback(e); return;
                 }
-                string _pkg;
-                if ( !sl_tcp_socket_read(e.so, _pkg) ) {
+                string _pkt;
+                if ( !sl_tcp_socket_read(e.so, _pkt) ) {
                     e.event = SL_EVENT_FAILED; callback(e); return;
                 }
-                const sl_socks5_handshake_response* _resp = (const sl_socks5_handshake_response *)_pkg.c_str();
+                const sl_socks5_handshake_response* _resp = (const sl_socks5_handshake_response *)_pkt.c_str();
                 // This api is for no-auth proxy
                 if ( _resp->ver != 0x05 && _resp->method != sl_method_noauth ) {
                     lerror << "unsupported authentication method" << lend;
@@ -1772,11 +1847,11 @@ bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& socks5, const string
                      * since as you can see below, we accept only ATYP == 1 which specifies
                      * that the IPv4 address is in a binary format.
                      */
-                    string _pkg;
-                    if (!sl_tcp_socket_read(e.so, _pkg)) {
+                    string _pkt;
+                    if (!sl_tcp_socket_read(e.so, _pkt)) {
                         e.event = SL_EVENT_FAILED; callback(e); return;
                     }
-                    const sl_socks5_ipv4_response* _resp = (const sl_socks5_ipv4_response *)_pkg.c_str();
+                    const sl_socks5_ipv4_response* _resp = (const sl_socks5_ipv4_response *)_pkt.c_str();
 
                     /* Check the server's version. */
                     if ( _resp->ver != 0x05 ) {
@@ -1798,10 +1873,10 @@ bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& socks5, const string
             }) ? void() : [&e, callback](){ e.event = SL_EVENT_FAILED; callback(e); }();
         }));
     } else {
-        ldebug << "the socks5 is empty, try to connect to host(" << host << ") directly" << lend;
+        //ldebug << "the socks5 is empty, try to connect to host(" << host << ") directly" << lend;
         sl_ip _host_ip(host);
         if ( (uint32_t)_host_ip == (uint32_t)-1 ) {
-            ldebug << "the host(" << host << ") is not an IP address, try to resolve first" << lend;
+            //ldebug << "the host(" << host << ") is not an IP address, try to resolve first" << lend;
             // This is a domain
             sl_async_gethostname(host, [tso, host, port, callback](const vector<sl_ip> &iplist){
                 if ( iplist.size() == 0 || ((uint32_t)iplist[0] == (uint32_t)-1) ) {
@@ -1812,7 +1887,7 @@ bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& socks5, const string
                     _e.event = SL_EVENT_FAILED;
                     callback(_e);
                 } else {
-                    ldebug << "resolvd the host " << host << ", trying to connect via tcp socket" << lend;
+                    //ldebug << "resolvd the host " << host << ", trying to connect via tcp socket" << lend;
                     if ( !sl_tcp_socket_connect(tso, iplist, port, 0, callback) ) {
                         lerror << "failed to connect to the host(" << host << ")" << lend;
                         sl_event _e;
@@ -1827,38 +1902,104 @@ bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& socks5, const string
         return sl_tcp_socket_connect(tso, sl_peerinfo(host, port), callback);
     }
 }
-bool sl_tcp_socket_send(SOCKET_T tso, const string &pkg)
-{
-    if ( pkg.size() == 0 ) return false;
-    if ( SOCKET_NOT_VALIDATE(tso) ) return false;
 
-    ldebug << "will write data(l:" << pkg.size() << ") to tcp socket: " << tso << lend;
-    int _lastSent = 0;
+void _sl_tcp_socket_on_write(sl_event e) {
+    sl_write_info _wi;
+    do {
+        lock_guard<mutex> _(_g_so_write_mutex);
+        auto _wiit = _g_so_write_map.find(e.so);
+        if ( _wiit == _g_so_write_map.end() ) return;
+        _wi = _wiit->second;
+    } while( false );
 
-    unsigned int _length = pkg.size();
-    const char *_data = pkg.c_str();
+    sl_shared_write_pakcage _sswpkt;
+    do {
+        lock_guard<mutex> _(*_wi.locker);
+        assert(_wi.packet_queue->size() > 0);
+        _sswpkt = _wi.packet_queue->front();
+    } while( false );
 
-    while ( _length > 0 )
-    {
-        _lastSent = ::send( tso, _data, 
-            _length, 0 | SL_NETWORK_NOSIGNAL );
-        if( _lastSent <= 0 ) {
-            if ( ENOBUFS == errno || EAGAIN == errno ) {
-                // try to increase the write buffer and then retry
-                uint32_t _wmem = 0, _lmem = 0;
-                getsockopt(tso, SOL_SOCKET, SO_SNDBUF, (char *)&_wmem, &_lmem);
-                _wmem *= 2; // double the buffer
-                setsockopt(tso, SOL_SOCKET, SO_SNDBUF, (char *)&_wmem, _lmem);
+    //ldebug << "will send data(l:" << _sswpkt->packet.size() << ") to socket " << e.so << ", write mem: " << _wmem << lend;
+
+    while ( _sswpkt->sent_size < _sswpkt->packet.size() ) {
+        int _retval = ::send(e.so, 
+            _sswpkt->packet.c_str() + _sswpkt->sent_size, 
+            (_sswpkt->packet.size() - _sswpkt->sent_size), 
+            0 | SL_NETWORK_NOSIGNAL);
+        //ldebug << "send return value: " << _retval << lend;
+        if ( _retval < 0 ) {
+            if ( ENOBUFS == errno || EAGAIN == errno || EWOULDBLOCK == errno ) {
+                // No buf
+                break;
             } else {
-                // Failed to send
-                lerror << "failed to send data on tcp socket: " << tso << ", err(" << errno << "): " << ::strerror(errno) << lend;
-                return false;
+                lerror
+                    << "failed to send data on tcp socket: " << e.so 
+                    << ", err(" << errno << "): " << ::strerror(errno) << lend;
+                e.event = SL_EVENT_FAILED;
+                if ( _sswpkt->callback ) _sswpkt->callback(e);
+                return;
             }
+        } else if ( _retval == 0 ) {
+            // No buf? sent 0
+            break;
         } else {
-            _data += _lastSent;
-            _length -= _lastSent;
+            _sswpkt->sent_size += _retval;
         }
     }
+    do {
+        lock_guard<mutex> _(*_wi.locker);
+        if ( _sswpkt->sent_size == _sswpkt->packet.size() ) {
+            _wi.packet_queue->pop();
+        }
+        if ( _wi.packet_queue->size() == 0 ) break;
+        // Remonitor
+        sl_events::server().update_handler(e.so, SL_EVENT_WRITE, _sl_tcp_socket_on_write);
+
+        int _eid = SL_EVENT_WRITE;
+        if ( sl_events::server().has_handler(e.so, SL_EVENT_READ) ) {
+            _eid |= SL_EVENT_READ;
+        }
+        sl_poller::server().monitor_socket(e.so, true, (SL_EVENT_ID)_eid);
+    } while ( false );
+    if ( _sswpkt->callback ) _sswpkt->callback(e);
+}
+
+bool sl_tcp_socket_send(SOCKET_T tso, const string &pkt, sl_socket_event_handler callback)
+{
+    if ( pkt.size() == 0 ) return false;
+    if ( SOCKET_NOT_VALIDATE(tso) ) return false;
+
+    //_g_so_write_map
+    sl_write_info _wi;
+    do {
+        lock_guard<mutex> _(_g_so_write_mutex);
+        auto _wiit = _g_so_write_map.find(tso);
+        if ( _wiit == _g_so_write_map.end() ) return false;
+        _wi = _wiit->second;
+    } while( false );
+
+    // Create the new write packet
+    shared_ptr<sl_write_packet> _wpkt = make_shared<sl_write_packet>();
+    //_wpkt->packet.swap(pkt);
+    _wpkt->packet = move(pkt);
+    _wpkt->sent_size = 0;
+    _wpkt->callback = move(callback);
+
+    // Lock the write queue
+    lock_guard<mutex> _(*_wi.locker);
+    _wi.packet_queue->push(_wpkt);
+
+    // Just push the packet to the end of the queue
+    if ( _wi.packet_queue->size() > 1 ) return true;
+
+    sl_events::server().update_handler(tso, SL_EVENT_WRITE, _sl_tcp_socket_on_write);
+
+    int _eid = SL_EVENT_WRITE;
+    if ( sl_events::server().has_handler(tso, SL_EVENT_READ) ) {
+        _eid |= SL_EVENT_READ;
+    }
+    sl_poller::server().monitor_socket(tso, true, (SL_EVENT_ID)_eid);
+
     return true;
 }
 bool sl_tcp_socket_monitor(SOCKET_T tso, sl_socket_event_handler callback, bool new_incoming)
@@ -1879,7 +2020,21 @@ bool sl_tcp_socket_monitor(SOCKET_T tso, sl_socket_event_handler callback, bool 
         callback(e);
     });
 
-    return sl_poller::server().monitor_socket(tso, true, SL_EVENT_DEFAULT, !new_incoming);
+    sl_write_info _wi;
+    do {
+        lock_guard<mutex> _(_g_so_write_mutex);
+        auto _wiit = _g_so_write_map.find(tso);
+        if ( _wiit == _g_so_write_map.end() ) return false;
+        _wi = _wiit->second;
+    } while( false );
+
+    lock_guard<mutex> _(*_wi.locker);
+    int _eid = SL_EVENT_DEFAULT;
+    if ( sl_events::server().has_handler(tso, SL_EVENT_WRITE) ) {
+        _eid |= SL_EVENT_WRITE;
+    }
+
+    return sl_poller::server().monitor_socket(tso, true, (SL_EVENT_ID)_eid, !new_incoming);
 }
 bool sl_tcp_socket_read(SOCKET_T tso, string& buffer, size_t max_buffer_size)
 {
@@ -1894,22 +2049,20 @@ bool sl_tcp_socket_read(SOCKET_T tso, string& buffer, size_t max_buffer_size)
     do {
         int _retCode = ::recv(tso, &buffer[0] + _received, _leftspace, 0 );
         if ( _retCode < 0 ) {
-            int _error = 0, _len = sizeof(int);
-            getsockopt( tso, SOL_SOCKET, SO_ERROR,
-                    (char *)&_error, (socklen_t *)&_len);
-            if ( _error == EINTR ) continue;    // signal 7, retry
-            if ( _error == EAGAIN ) {
+            if ( errno == EINTR ) continue;    // signal 7, retry
+            if ( errno == EAGAIN || errno == EWOULDBLOCK ) {
                 // No more data on a non-blocking socket
                 buffer.resize(_received);
                 return true;
             }
             // Other error
             buffer.resize(0);
-            lerror << "failed to receive data on tcp socket: " << tso << ", " << ::strerror( _error ) << lend;
+            lerror << "failed to receive data on tcp socket: " << tso << ", " << ::strerror( errno ) << lend;
             return false;
         } else if ( _retCode == 0 ) {
             // Peer Close
             buffer.resize(0);
+            lerror << "the peer has close the socket, recv 0" << lend;
             return false;
         } else {
             _received += _retCode;
@@ -1976,7 +2129,14 @@ bool sl_tcp_socket_listen(SOCKET_T tso, const sl_peerinfo& bind_port, sl_socket_
             return;
         }
 
-        sl_events::server().bind(e.so, sl_event_empty_handler());
+        // Add A Write Buffer
+        sl_write_info _wi = { make_shared<mutex>(), make_shared< queue<sl_shared_write_pakcage> >() };
+        do {
+            lock_guard<mutex> _(_g_so_write_mutex);
+            _g_so_write_map[e.so] = _wi;
+        } while(false);
+
+        sl_events::server().bind(e.so, sl_events::empty_handler());
         accept_callback(e);
     });
 
@@ -2032,13 +2192,13 @@ SOCKET_T sl_udp_socket_init(const sl_peerinfo& bind_addr)
 
     // Bind the empty handler set
     //sl_event_bind_handler(_so, sl_event_empty_handler());
-    sl_events::server().bind(_so, sl_event_empty_handler());
+    sl_events::server().bind(_so, sl_events::empty_handler());
     return _so;
 }
 
-bool sl_udp_socket_send(SOCKET_T uso, const string &pkg, const sl_peerinfo& peer)
+bool sl_udp_socket_send(SOCKET_T uso, const string &pkt, const sl_peerinfo& peer)
 {
-    if ( pkg.size() == 0 ) return false;
+    if ( pkt.size() == 0 ) return false;
     if ( SOCKET_NOT_VALIDATE(uso) ) return false;
 
     int _allSent = 0;
@@ -2048,8 +2208,8 @@ bool sl_udp_socket_send(SOCKET_T uso, const string &pkg, const sl_peerinfo& peer
     _sock_addr.sin_port = htons(peer.port_number);
     _sock_addr.sin_addr.s_addr = (uint32_t)peer.ipaddress;
 
-    uint32_t _length = pkg.size();
-    const char *_data = pkg.c_str();
+    uint32_t _length = pkt.size();
+    const char *_data = pkt.c_str();
 
     // Get the local port for debug usage.
     uint32_t _lport;
@@ -2075,7 +2235,7 @@ bool sl_udp_socket_monitor(SOCKET_T uso, const sl_peerinfo& peer, sl_socket_even
 
     sl_events::server().update_handler(uso, SL_EVENT_READ, [peer, callback](sl_event e) {
         if ( e.event != SL_EVENT_READ ) return;
-        ldebug << "udp socket " << e.so << " did get read event callback, which means has incoming data" << lend;
+        //ldebug << "udp socket " << e.so << " did get read event callback, which means has incoming data" << lend;
         if ( peer ) {
             e.address.sin_family = AF_INET;
             e.address.sin_port = htons(peer.port_number);
@@ -2095,7 +2255,7 @@ bool sl_udp_socket_monitor(SOCKET_T uso, const sl_peerinfo& peer, sl_socket_even
         }
         callback(e);
     });
-    ldebug << "did update the handler for udp socket " << uso << " on SL_EVENT_READ(2) and SL_EVENT_FAILED(4)" << lend;
+    //ldebug << "did update the handler for udp socket " << uso << " on SL_EVENT_READ(2) and SL_EVENT_FAILED(4)" << lend;
     return sl_poller::server().monitor_socket(uso, true, SL_EVENT_DEFAULT);
 }
 bool sl_udp_socket_read(SOCKET_T uso, struct sockaddr_in addr, string& buffer, size_t max_buffer_size)
@@ -2103,7 +2263,7 @@ bool sl_udp_socket_read(SOCKET_T uso, struct sockaddr_in addr, string& buffer, s
     if ( SOCKET_NOT_VALIDATE(uso) ) return false;
 
     sl_peerinfo _pi(addr.sin_addr.s_addr, ntohs(addr.sin_port));
-    ldebug << "udp socket " << uso << " tring to read data from " << _pi << lend;
+    //ldebug << "udp socket " << uso << " tring to read data from " << _pi << lend;
     buffer.clear();
     buffer.resize(max_buffer_size);
 
@@ -2164,10 +2324,10 @@ bool sl_udp_socket_listen(SOCKET_T uso, sl_socket_event_handler accept_callback)
 
 // Global DNS Server List
 vector<sl_peerinfo> _resolv_list;
-void __sl_async_gethostnmae_udp(const string&& query_pkg, size_t use_index, async_dns_handler fp);
-void __sl_async_gethostnmae_tcp(const string&& query_pkg, size_t use_index, async_dns_handler fp);
+void __sl_async_gethostnmae_udp(const string&& query_pkt, size_t use_index, async_dns_handler fp);
+void __sl_async_gethostnmae_tcp(const string&& query_pkt, size_t use_index, async_dns_handler fp);
 
-void __sl_async_gethostnmae_udp(const string&& query_pkg, size_t use_index, async_dns_handler fp)
+void __sl_async_gethostnmae_udp(const string&& query_pkt, size_t use_index, async_dns_handler fp)
 {
     // No other validate resolve ip in the list, return the 255.255.255.255
     if ( _resolv_list.size() == use_index ) {
@@ -2176,45 +2336,45 @@ void __sl_async_gethostnmae_udp(const string&& query_pkg, size_t use_index, asyn
         return;
     }
 
-    // Create a new udp socket and send the query package.
+    // Create a new udp socket and send the query packet.
     SOCKET_T _uso = sl_udp_socket_init();
     string _domain;
-    dns_get_domain(query_pkg.c_str(), query_pkg.size(), _domain);
-    ldebug << "initialize a udp socket " << _uso << " to query domain: " << _domain << lend;
-    if ( !sl_udp_socket_send(_uso, query_pkg, _resolv_list[use_index]) ) {
-        lerror << "failed to send dns query package to " << _resolv_list[use_index] << lend;
+    dns_get_domain(query_pkt.c_str(), query_pkt.size(), _domain);
+    //ldebug << "initialize a udp socket " << _uso << " to query domain: " << _domain << lend;
+    if ( !sl_udp_socket_send(_uso, query_pkt, _resolv_list[use_index]) ) {
+        lerror << "failed to send dns query packet to " << _resolv_list[use_index] << lend;
         // Failed to send( unable to access the server );
         sl_socket_close(_uso);
         // Go next server
-        __sl_async_gethostnmae_udp(move(query_pkg), use_index + 1, fp);
+        __sl_async_gethostnmae_udp(move(query_pkt), use_index + 1, fp);
         return;
     }
 
     // Monitor for the response data
-    sl_udp_socket_monitor(_uso, _resolv_list[use_index], [&query_pkg, use_index, fp](sl_event e) {
+    sl_udp_socket_monitor(_uso, _resolv_list[use_index], [&query_pkt, use_index, fp](sl_event e) {
         // Current server has closed the socket
         if ( e.event == SL_EVENT_FAILED ) {
             lerror << "failed to get response from " << _resolv_list[use_index] << " for dns query." << lend;
             sl_socket_close(e.so);
-            __sl_async_gethostnmae_udp(move(query_pkg), use_index + 1, fp);
+            __sl_async_gethostnmae_udp(move(query_pkt), use_index + 1, fp);
             return;
         }
 
-        // Read the incoming package
-        string _incoming_pkg;
-        if (!sl_udp_socket_read(e.so, e.address, _incoming_pkg)) {
+        // Read the incoming packet
+        string _incoming_pkt;
+        if (!sl_udp_socket_read(e.so, e.address, _incoming_pkt)) {
             lerror << "failed to read data from udp socket for dns query." << lend;
             sl_socket_close(e.so);
-            __sl_async_gethostnmae_udp(move(query_pkg), use_index + 1, fp);
+            __sl_async_gethostnmae_udp(move(query_pkt), use_index + 1, fp);
             return;
         }
         sl_socket_close(e.so);
 
-        const clnd_dns_package *_pheader = (const clnd_dns_package *)_incoming_pkg.c_str();
+        const clnd_dns_packet *_pheader = (const clnd_dns_packet *)_incoming_pkt.c_str();
         if ( _pheader->get_resp_code() == dns_rcode_noerr ) {
             vector<uint32_t> _a_recs;
             string _qdomain;
-            dns_get_a_records(_incoming_pkg.c_str(), _incoming_pkg.size(), _qdomain, _a_recs);
+            dns_get_a_records(_incoming_pkt.c_str(), _incoming_pkt.size(), _qdomain, _a_recs);
             vector<sl_ip> _retval;
             for ( auto _a : _a_recs ) {
                 _retval.push_back(sl_ip(_a));
@@ -2222,79 +2382,79 @@ void __sl_async_gethostnmae_udp(const string&& query_pkg, size_t use_index, asyn
             fp( _retval );
         } else if ( _pheader->get_is_truncation() ) {
             // TRUNC flag get, try to use tcp
-            __sl_async_gethostnmae_tcp(move(query_pkg), use_index, fp);
+            __sl_async_gethostnmae_tcp(move(query_pkt), use_index, fp);
         } else {
-            __sl_async_gethostnmae_udp(move(query_pkg), use_index + 1, fp);
+            __sl_async_gethostnmae_udp(move(query_pkt), use_index + 1, fp);
         }
-    }) ? void() : [&query_pkg, use_index, fp, _uso](){
+    }) ? void() : [&query_pkt, use_index, fp, _uso](){
         lerror << "failed to monitor on " << _uso << lend;
         sl_socket_close(_uso);
         // Go next server
-        __sl_async_gethostnmae_udp(move(query_pkg), use_index + 1, fp);
+        __sl_async_gethostnmae_udp(move(query_pkt), use_index + 1, fp);
         return;
     }();
 }
-void __sl_async_gethostnmae_tcp(const string&& query_pkg, size_t use_index, async_dns_handler fp)
+void __sl_async_gethostnmae_tcp(const string&& query_pkt, size_t use_index, async_dns_handler fp)
 {
     SOCKET_T _tso = sl_tcp_socket_init();
     if ( SOCKET_NOT_VALIDATE(_tso) ) {
         // No enough file handler
-        __sl_async_gethostnmae_udp(move(query_pkg), use_index + 1, fp);
+        __sl_async_gethostnmae_udp(move(query_pkt), use_index + 1, fp);
         return;
     }
 
-    sl_tcp_socket_connect(_tso, _resolv_list[use_index], [&query_pkg, use_index, fp](sl_event e) {
+    sl_tcp_socket_connect(_tso, _resolv_list[use_index], [&query_pkt, use_index, fp](sl_event e) {
         if ( e.event == SL_EVENT_FAILED ) {
             // Server not support tcp
             //sl_socket_close(_tso);
             sl_socket_close(e.so);
-            __sl_async_gethostnmae_udp(move(query_pkg), use_index + 1, fp);
+            __sl_async_gethostnmae_udp(move(query_pkt), use_index + 1, fp);
             return;
         }
-        string _tpkg;
-        dns_generate_tcp_redirect_package(move(query_pkg), _tpkg);
-        if ( !sl_tcp_socket_send(e.so, _tpkg) ) {
+        string _tpkt;
+        dns_generate_tcp_redirect_packet(move(query_pkt), _tpkt);
+        if ( !sl_tcp_socket_send(e.so, _tpkt) ) {
             // Failed to send
             sl_socket_close(e.so);
-            __sl_async_gethostnmae_udp(move(query_pkg), use_index + 1, fp);
+            __sl_async_gethostnmae_udp(move(query_pkt), use_index + 1, fp);
             return;
         }
-        sl_tcp_socket_monitor(e.so, [&query_pkg, use_index, fp](sl_event e) {
+        sl_tcp_socket_monitor(e.so, [&query_pkt, use_index, fp](sl_event e) {
             if ( e.event == SL_EVENT_FAILED ) {
                 // Peer closed
                 sl_socket_close(e.so);
-                __sl_async_gethostnmae_udp(move(query_pkg), use_index + 1, fp);
+                __sl_async_gethostnmae_udp(move(query_pkt), use_index + 1, fp);
                 return;
             }
 
             // Read incoming
-            string _tcp_incoming_pkg;
-            if ( !sl_tcp_socket_read(e.so, _tcp_incoming_pkg) ) {
+            string _tcp_incoming_pkt;
+            if ( !sl_tcp_socket_read(e.so, _tcp_incoming_pkt) ) {
                 sl_socket_close(e.so);
-                __sl_async_gethostnmae_udp(move(query_pkg), use_index + 1, fp);
+                __sl_async_gethostnmae_udp(move(query_pkt), use_index + 1, fp);
                 return;
             }
             sl_socket_close(e.so);
 
-            string _incoming_pkg;
-            dns_generate_udp_response_package_from_tcp(_tcp_incoming_pkg, _incoming_pkg);
-            const clnd_dns_package *_pheader = (const clnd_dns_package *)_incoming_pkg.c_str();
+            string _incoming_pkt;
+            dns_generate_udp_response_packet_from_tcp(_tcp_incoming_pkt, _incoming_pkt);
+            const clnd_dns_packet *_pheader = (const clnd_dns_packet *)_incoming_pkt.c_str();
             if ( _pheader->get_resp_code() == dns_rcode_noerr ) {
                 vector<uint32_t> _a_recs;
                 string _qdomain;
-                dns_get_a_records(_incoming_pkg.c_str(), _incoming_pkg.size(), _qdomain, _a_recs);
+                dns_get_a_records(_incoming_pkt.c_str(), _incoming_pkt.size(), _qdomain, _a_recs);
                 vector<sl_ip> _retval;
                 for ( auto _a : _a_recs ) {
                     _retval.push_back(sl_ip(_a));
                 }
                 fp( _retval );
             } else {
-                __sl_async_gethostnmae_udp(move(query_pkg), use_index + 1, fp);
+                __sl_async_gethostnmae_udp(move(query_pkt), use_index + 1, fp);
             }
-        }) ? void() : [&query_pkg, use_index, fp, e](){
+        }) ? void() : [&query_pkt, use_index, fp, e](){
             lerror << "failed to monitor on " << e.so << lend;
             sl_socket_close(e.so);
-            __sl_async_gethostnmae_udp(move(query_pkg), use_index + 1, fp);
+            __sl_async_gethostnmae_udp(move(query_pkt), use_index + 1, fp);
         }();
     });
 }
@@ -2308,12 +2468,12 @@ void sl_async_gethostname(const string& host, async_dns_handler fp)
                 ntohs(_res.nsaddr_list[i].sin_port)
                 );
             _resolv_list.push_back(_pi);
-            ldebug << "resolv get dns: " << _pi << lend;
+            //ldebug << "resolv get dns: " << _pi << lend;
         }
     }
-    string _qpkg;
-    dns_generate_query_package(host, _qpkg);
-    __sl_async_gethostnmae_udp(move(_qpkg), 0, fp);
+    string _qpkt;
+    dns_generate_query_packet(host, _qpkt);
+    __sl_async_gethostnmae_udp(move(_qpkt), 0, fp);
 }
 
 /*
@@ -2487,7 +2647,7 @@ bool sl_tcpsocket::setup_proxy(
 	memcpy(_buf + _index, password.data(), password.size());
 	_index += password.size();
 
-	// Send handshake package
+	// Send handshake packet
 	if (write(m_socket, _buf, _index) < 0) {
 		this->close();
 		return false;

@@ -70,6 +70,7 @@ protected:
     bool                            gateway_;
     uint16_t                        gateway_port_;
     sl_peerinfo                     gateway_socks5_;
+    vector<sl_iprange>              gateway_access_control_;
 
     cp_log_level _loglv_from_string(const string& loglv_string);
 public:
@@ -86,6 +87,7 @@ public:
     const bool &                    gateway;
     const uint16_t &                gateway_port;
     const sl_peerinfo &             gateway_socks5;
+    const vector<sl_iprange>        gateway_access_control;
 
     clnd_config_service( );
     virtual ~clnd_config_service();
@@ -93,6 +95,8 @@ public:
     clnd_config_service( const Json::Value& config_node );
 
     void start_log() const;
+
+    bool allow_access_from_ip(const sl_ip& in_ip);
 
     // Local Gateway Black List cache
     void add_a_record_cache(uint32_t ipaddr);

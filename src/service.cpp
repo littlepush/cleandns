@@ -81,7 +81,8 @@ clnd_config_service::clnd_config_service( ) :
     control_port(control_port_),
     gateway(gateway_),
     gateway_port(gateway_port_),
-    gateway_socks5(gateway_socks5_)
+    gateway_socks5(gateway_socks5_),
+    gateway_access_control(gateway_access_control_)
     { /* nothing */ }
 clnd_config_service::~clnd_config_service() { /* nothing */ }
 
@@ -96,7 +97,8 @@ clnd_config_service::clnd_config_service( const Json::Value& config_node ) :
     control_port(control_port_),
     gateway(gateway_),
     gateway_port(gateway_port_),
-    gateway_socks5(gateway_socks5_)
+    gateway_socks5(gateway_socks5_),
+    gateway_access_control(gateway_access_control_)
 {
     // Service
     service_protocol_ = clnd_protocol_from_string(
@@ -112,6 +114,18 @@ clnd_config_service::clnd_config_service( const Json::Value& config_node ) :
     gateway_ = check_key_with_default(config_node, "gateway", false).asBool();
     gateway_port_ = check_key_with_default(config_node, "gateway_port", 4300).asUInt();
     gateway_socks5_ = check_key_with_default(config_node, "gateway_socks5", "0.0.0.0:0").asString();
+    if ( config_node.isMember("access_control") ) {
+        check_key_mustbe_array(config_node, "access_control");
+        Json::Value _aclist = config_node["access_control"];
+        for ( Json::ArrayIndex i = 0; i < _aclist.size(); ++i ) {
+            sl_iprange _range(_aclist[i].asString());
+            if ( _range ) {
+                gateway_access_control_.emplace_back(_range);
+            } else {
+                lwarning << "the config of access control is not validate " << _aclist[i].asString() << lend;
+            }
+        }
+    }
 }
 
 void clnd_config_service::start_log() const {
@@ -137,6 +151,14 @@ bool clnd_config_service::is_ip_in_a_record_cache(uint32_t ipaddr)
 {
     lock_guard<mutex> _(a_records_mutex_);
     return a_records_cache_.find(ipaddr) != end(a_records_cache_);
+}
+bool clnd_config_service::allow_access_from_ip(const sl_ip& in_ip)
+{
+    if ( gateway_access_control_.size() == 0 ) return true;
+    for ( auto & _range : gateway_access_control_ ) {
+        if ( _range.is_ip_in_range(in_ip) ) return true;
+    }
+    return false;
 }
 
 

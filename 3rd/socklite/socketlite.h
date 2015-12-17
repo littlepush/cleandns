@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc3-1-g4180f1c
+// Current Version: 0.6-rc4
 
 #pragma once
 // inc/thread.hpp
@@ -84,6 +84,10 @@ namespace cpputility {
         __g_thread_mutex().unlock();
     }
 
+    inline void send_exit_signal() {
+        kill(getpid(), SIGQUIT);
+    }
+
     class thread_info
     {
         typedef map< thread::id, pair< shared_ptr<mutex>, shared_ptr<bool> > > info_map_t;
@@ -122,7 +126,8 @@ namespace cpputility {
                     lock_guard<mutex> _(info_mutex_);
                     if ( info_map_.size() == 0 ) return;
                 }
-                usleep(1000);   // wait for 1ms
+                //usleep(1000);   // wait for 1ms
+                usleep(50);
             } while ( true );
         }
         // join specified thread
@@ -191,6 +196,9 @@ namespace cpputility {
             wait_for_exit_signal();
             if ( exit_callback_ ) exit_callback_() ;
             join_all_threads();
+        }
+        static void quit() {
+            send_exit_signal();
         }
     };
 
@@ -677,7 +685,7 @@ namespace cpputility
         } while( _pos < value.size() );
     }
 
-    // Dump binary package with HEX
+    // Dump binary packet with HEX
     static inline void dump_hex(const char *data, unsigned int length, FILE *of = stdout) {
         const static unsigned int g_char_per_line = 16;
         const static unsigned int g_addr_size = sizeof(intptr_t) * 2 + 2;
@@ -794,7 +802,7 @@ typedef enum {
 } dns_rcode;
 
 #pragma pack(push, 1)
-class clnd_dns_package {
+class clnd_dns_packet {
 protected:
     uint16_t        transaction_id_;
     uint16_t        flags_;
@@ -821,18 +829,18 @@ public:
     uint16_t        get_ns_count() const;
     uint16_t        get_ar_count() const;
 
-    clnd_dns_package( bool is_query = true, dns_opcode opcode = dns_opcode_standard, uint16_t qd_count = 1 );
-    clnd_dns_package( const char *data, uint16_t len );
-    clnd_dns_package( const clnd_dns_package &rhs );
-    clnd_dns_package& operator= (const clnd_dns_package &rhs );
+    clnd_dns_packet( bool is_query = true, dns_opcode opcode = dns_opcode_standard, uint16_t qd_count = 1 );
+    clnd_dns_packet( const char *data, uint16_t len );
+    clnd_dns_packet( const clnd_dns_packet &rhs );
+    clnd_dns_packet& operator= (const clnd_dns_packet &rhs );
 
-    // The size of the package, should always be 10
+    // The size of the packet, should always be 10
     size_t size() const;
-    // The buffer point of the package
+    // The buffer point of the packet
     const char *const pbuf();
 
-    clnd_dns_package *dns_resp_package(string &buf, dns_rcode rcode, uint16_t ancount = 1) const;
-    clnd_dns_package *dns_truncation_package( string &buf ) const;
+    clnd_dns_packet *dns_resp_packet(string &buf, dns_rcode rcode, uint16_t ancount = 1) const;
+    clnd_dns_packet *dns_truncation_packet( string &buf ) const;
 
 protected:
     static bool clnd_dns_support_recursive;
@@ -843,41 +851,41 @@ public:
 
 #pragma pack(pop)
 
-// Get the domain from the dns querying package.
+// Get the domain from the dns querying packet.
 // The query domain seg will store the domain in the following format:
 // [length:1Byte][component][length:1Byte][component]...
-int dns_get_domain( const char *pkg, unsigned int len, std::string &domain );
+int dns_get_domain( const char *pkt, unsigned int len, std::string &domain );
 
-// Generate a query package
-int dns_generate_query_package( const string &query_name, string& buffer, dns_qtype qtype = dns_qtype_host );
+// Generate a query packet
+int dns_generate_query_packet( const string &query_name, string& buffer, dns_qtype qtype = dns_qtype_host );
 
-// Generate a tc package
-int dns_generate_tc_package( const string& incoming_pkg, string& buffer );
+// Generate a tc packet
+int dns_generate_tc_packet( const string& incoming_pkt, string& buffer );
 
-// Generate a tcp redirect package
-int dns_generate_tcp_redirect_package( const string &incoming_pkg, string &buffer );
+// Generate a tcp redirect packet
+int dns_generate_tcp_redirect_packet( const string &incoming_pkt, string &buffer );
 
-// Generate a udp redirect package from tcp response
-int dns_generate_udp_response_package_from_tcp( const string &incoming_pkg, string &buffer );
+// Generate a udp redirect packet from tcp response
+int dns_generate_udp_response_packet_from_tcp( const string &incoming_pkt, string &buffer );
 
-// Generate the A records response from the received package
-void dns_generate_a_records_resp( const char *pkg, unsigned int len, vector<uint32_t> ipaddress, string &buf );
+// Generate the A records response from the received packet
+void dns_generate_a_records_resp( const char *pkt, unsigned int len, vector<uint32_t> ipaddress, string &buf );
 
-// Generate response package for specified query domain
+// Generate response packet for specified query domain
 void dns_generate_a_records_resp( 
     const string &query_domain, 
     uint16_t trans_id, 
     const vector<uint32_t> & iplist, 
     string &buf );
 
-// Generate the C Name records response from the received package
-void dns_gnerate_cname_records_resp( const char *pkg, unsigned int len, vector<string> cnamelist, string &buf );
+// Generate the C Name records response from the received packet
+void dns_gnerate_cname_records_resp( const char *pkt, unsigned int len, vector<string> cnamelist, string &buf );
 
-// Get all available A records from a package
-void dns_get_a_records( const char *pkg, unsigned int len, string &qdomain, vector<uint32_t> &a_records );
+// Get all available A records from a packet
+void dns_get_a_records( const char *pkt, unsigned int len, string &qdomain, vector<uint32_t> &a_records );
 
 // Check if is a query request
-bool dns_is_query(const char *pkg, unsigned int len);
+bool dns_is_query(const char *pkt, unsigned int len);
 
 #endif
 
@@ -1178,6 +1186,32 @@ public:
 // Output the peer info
 ostream & operator << (ostream &os, const sl_peerinfo &peer);
 
+/*
+IP Range, x.x.x.x/n
+*/
+class sl_iprange {
+private:
+    uint32_t        low_;
+    uint32_t        high_;
+
+    void parse_range_from_string(const string &format_string);
+public:
+    sl_iprange();
+    sl_iprange(const string & format_string);
+    sl_iprange(uint32_t low, uint32_t high);
+    sl_iprange(const sl_iprange &rhs);
+
+    sl_iprange & operator = (const sl_iprange & rhs);
+    sl_iprange & operator = (const string & format_string);
+
+    operator bool() const;
+    operator const string() const;
+    bool is_ip_in_range(const sl_ip& ip);
+};
+
+// Output the ip range
+ostream & operator << (ostream &os, const sl_iprange &range);
+
 
 // The basic virtual socket class
 class sl_socket
@@ -1330,14 +1364,15 @@ typedef struct tag_sl_handler_set {
     sl_socket_event_handler         on_write;
 } sl_handler_set;
 
-// Create and return an empty handler set
-sl_handler_set sl_event_empty_handler();
-
 class sl_events
 {
+public:
+    // Return an empty handler set
+    static sl_handler_set empty_handler();
+    typedef map<SOCKET_T, sl_handler_set>   shsmap_t;       // SOCKET_HANDLER_SET_MAP_TYPE
 protected:
-    mutable mutex           events_lock_;
-    vector< sl_event >      pending_events_;
+    mutable mutex           handler_mutex_;
+    shsmap_t                event_map_;
 
     // Protected constructure
     sl_events();
@@ -1347,9 +1382,11 @@ protected:
     uint32_t                timepiece_;
     sl_runloop_callback     rl_callback_;
 
+    // Running status
     bool                    is_running_;
     thread *                runloop_thread_;
 
+    // Manager Thread Info
     event_pool<sl_event>    events_pool_;
     vector<thread*>         thread_pool_;
     thread *                thread_pool_manager_;
@@ -1360,6 +1397,8 @@ protected:
     void _internal_add_worker();
     void _internal_remove_worker();
     void _internal_worker();
+
+    sl_handler_set _find_handler(SOCKET_T so);
 public:
     ~sl_events();
     // return the singleton instance of sl_events
@@ -1367,12 +1406,10 @@ public:
 
     unsigned int pending_socket_count();
 
-    void bind( sl_socket *pso, sl_handler_set&& hset );
     void bind( SOCKET_T so, sl_handler_set&& hset );
-    void unbind( sl_socket *pso );
     void unbind( SOCKET_T so );
-    void update_handler(sl_socket *pso, SL_EVENT_ID eid, sl_socket_event_handler&& h);
     void update_handler( SOCKET_T so, SL_EVENT_ID eid, sl_socket_event_handler&& h);
+    bool has_handler(SOCKET_T so, SL_EVENT_ID eid);
 
     bool is_running() const;
     void run( uint32_t timepiece = 10, sl_runloop_callback cb = NULL );
@@ -1441,14 +1478,14 @@ static inline const char *sl_socks5msg(sl_socks5rep rep) {
 };
 
 #pragma pack(push, 1)
-struct sl_socks5_package {
+struct sl_socks5_packet {
 	uint8_t 	ver;
 
 	// Default we only support version 5
-	sl_socks5_package() : ver(5) {}
+	sl_socks5_packet() : ver(5) {}
 };
 
-struct sl_socks5_handshake_request : public sl_socks5_package {
+struct sl_socks5_handshake_request : public sl_socks5_packet {
 	uint8_t		nmethods;
 };
 
@@ -1479,20 +1516,20 @@ struct sl_socks5_userpwd_request : public sl_socks5_handshake_request {
 		}
 };
 
-struct sl_socks5_handshake_response : public sl_socks5_package {
+struct sl_socks5_handshake_response : public sl_socks5_packet {
 	uint8_t		method;
 
-	sl_socks5_handshake_response() : sl_socks5_package() {}
-	sl_socks5_handshake_response(sl_methods m) : sl_socks5_package(), method(m) { }
+	sl_socks5_handshake_response() : sl_socks5_packet() {}
+	sl_socks5_handshake_response(sl_methods m) : sl_socks5_packet(), method(m) { }
 };
 
-struct sl_socks5_connect_request : public sl_socks5_package {
+struct sl_socks5_connect_request : public sl_socks5_packet {
 	uint8_t		cmd;
 	uint8_t		rsv;	// reserved
 	uint8_t		atyp;	// address type
 
 	sl_socks5_connect_request():
-		sl_socks5_package(), cmd(sl_socks5cmd_connect), rsv(0) {}
+		sl_socks5_packet(), cmd(sl_socks5cmd_connect), rsv(0) {}
 };
 
 struct sl_socks5_ipv4_request : public sl_socks5_connect_request {
@@ -1505,12 +1542,12 @@ struct sl_socks5_ipv4_request : public sl_socks5_connect_request {
 		}
 };
 
-struct sl_socks5_connect_response : public sl_socks5_package {
+struct sl_socks5_connect_response : public sl_socks5_packet {
 	uint8_t		rep;
 	uint8_t		rsv;
 	uint8_t		atyp;
 
-	sl_socks5_connect_response() : sl_socks5_package() {}
+	sl_socks5_connect_response() : sl_socks5_packet() {}
 };
 
 struct sl_socks5_ipv4_response : public sl_socks5_connect_response {
@@ -1574,7 +1611,7 @@ SOCKET_T sl_tcp_socket_init();
 bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& peer, sl_socket_event_handler callback);
 // Async connect to the host via a socks5 proxy
 bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& socks5, const string& host, uint16_t port, sl_socket_event_handler callback);
-bool sl_tcp_socket_send(SOCKET_T tso, const string &pkg);
+bool sl_tcp_socket_send(SOCKET_T tso, const string &pkt, sl_socket_event_handler callback = NULL);
 bool sl_tcp_socket_monitor(SOCKET_T tso, sl_socket_event_handler callback, bool new_incoming = false);
 bool sl_tcp_socket_read(SOCKET_T tso, string& buffer, size_t max_buffer_size = 4098);
 bool sl_tcp_socket_listen(SOCKET_T tso, const sl_peerinfo& bind_port, sl_socket_event_handler accept_callback);
@@ -1582,7 +1619,7 @@ sl_peerinfo sl_tcp_get_original_dest(SOCKET_T tso);
 
 // UDP Methods
 SOCKET_T sl_udp_socket_init(const sl_peerinfo& bind_addr = sl_peerinfo::nan());
-bool sl_udp_socket_send(SOCKET_T uso, const string &pkg, const sl_peerinfo& peer);
+bool sl_udp_socket_send(SOCKET_T uso, const string &pkt, const sl_peerinfo& peer);
 bool sl_udp_socket_monitor(SOCKET_T uso, const sl_peerinfo& peer, sl_socket_event_handler callback);
 bool sl_udp_socket_read(SOCKET_T uso, struct sockaddr_in addr, string& buffer, size_t max_buffer_size = 512);
 bool sl_udp_socket_listen(SOCKET_T uso, sl_socket_event_handler accept_callback);

@@ -127,9 +127,9 @@ void clnd_tcp_get_local_filter(sl_event e, const string& incoming_pkg, lp_clnd_f
     string _rbuf;
     clnd_get_local_filter(e, incoming_pkg, f, domain, _rbuf);
 
-    // Generate a tcp package
+    // Generate a tcp packet
     string _trbuf;
-    dns_generate_tcp_redirect_package(_rbuf, _trbuf);
+    dns_generate_tcp_redirect_packet(_rbuf, _trbuf);
     sl_tcp_socket_send(e.so, _trbuf);
     sl_socket_close(e.so);
 };
@@ -182,7 +182,7 @@ void clnd_udp_redirect_to_tcp(sl_event e, sl_event re, const string & incoming_p
     }
     ldebug << "connected to " << f->parent << " via socks5 proxy " << f->socks5 << lend;
     string _tincoming_pkg;
-    dns_generate_tcp_redirect_package(incoming_pkg, _tincoming_pkg);
+    dns_generate_tcp_redirect_packet(incoming_pkg, _tincoming_pkg);
     sl_tcp_socket_send(re.so, _tincoming_pkg);
     sl_tcp_socket_monitor(re.so, [e, f](sl_event re){
         if ( re.event == SL_EVENT_FAILED ) {
@@ -201,7 +201,7 @@ void clnd_udp_redirect_to_tcp(sl_event e, sl_event re, const string & incoming_p
         clnd_dump_a_records(_rbuf.c_str() + 2, _rbuf.size() - 2, f->parent);
 
         string _urbuf;
-        dns_generate_udp_response_package_from_tcp(_rbuf, _urbuf);
+        dns_generate_udp_response_packet_from_tcp(_rbuf, _urbuf);
         sl_udp_socket_send(e.so, _urbuf, sl_peerinfo(e.address.sin_addr.s_addr, ntohs(e.address.sin_port)));
 
         // Release the socket resource
@@ -421,11 +421,11 @@ int main( int argc, char *argv[] ) {
 
                 // Search a filter
                 lp_clnd_filter _f = clnd_search_match_filter(_domain);
-                // if is local filter, generate a response package
+                // if is local filter, generate a response packet
                 if ( _f->mode == clnd_filter_mode_local ) {
                     clnd_tcp_get_local_filter(e, _incoming_buf, _f, _domain);
                 } 
-                // else if use direct redirect, create a tcp socket then send the package and wait,
+                // else if use direct redirect, create a tcp socket then send the packet and wait,
                 else if ( _f->socks5 == false ) {
                     SOCKET_T _rt = sl_tcp_socket_init();
                     sl_tcp_socket_connect(_rt, _f->parent, [e, _f, _incoming_buf](sl_event re){
@@ -484,11 +484,11 @@ int main( int argc, char *argv[] ) {
             linfo << "the incoming request " << _ipeer << " want to query domain: " << _domain << lend;
             // Search a filter
             lp_clnd_filter _f = clnd_search_match_filter(_domain);
-            // if is local filter, generate a response package
+            // if is local filter, generate a response packet
             if ( _f->mode == clnd_filter_mode_local ) {
                 clnd_udp_get_local_filter(e, _incoming_buf, _f, _domain);
             } 
-            // else if use direct redirect, create a tcp socket then send the package and wait,
+            // else if use direct redirect, create a tcp socket then send the packet and wait,
             else if ( _f->socks5 == false ) {
                 SOCKET_T _rt = sl_udp_socket_init();
                 sl_udp_socket_send(_rt, _incoming_buf, _f->parent);
@@ -633,7 +633,7 @@ int main( int argc, char *argv[] ) {
                 lerror << "failed to initialize a tcp redirect socket" << lend;
                 return;
             }
-			ldebug << "just create a redirect socket " << _rso << " for redirect the package from " << _lpi << lend;
+			ldebug << "just create a redirect socket " << _rso << " for redirect the packet from " << _lpi << lend;
             if ( !sl_tcp_socket_connect(_rso, _socks5, _orgnl.ipaddress, _orgnl.port_number, [e](sl_event re) {
                 if ( re.event == SL_EVENT_FAILED ) {
                     sl_socket_close(e.so);
