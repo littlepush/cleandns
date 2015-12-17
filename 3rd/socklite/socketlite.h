@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc4
+// Current Version: 0.6-rc4-2-g286e645
 
 #pragma once
 // inc/thread.hpp
@@ -834,7 +834,7 @@ public:
     clnd_dns_packet( const clnd_dns_packet &rhs );
     clnd_dns_packet& operator= (const clnd_dns_packet &rhs );
 
-    // The size of the packet, should always be 10
+    // The size of the packet, should always be 12
     size_t size() const;
     // The buffer point of the packet
     const char *const pbuf();

@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc4
+// Current Version: 0.6-rc4-2-g286e645
 
 #include "socketlite.h"
 // src/dns.cpp
@@ -75,7 +75,7 @@ clnd_dns_packet& clnd_dns_packet::operator= (const clnd_dns_packet &rhs )
     ar_count_ = rhs.ar_count_;
     return *this;
 }
-size_t clnd_dns_packet::size() const { return sizeof(uint16_t) * 5; }
+size_t clnd_dns_packet::size() const { return sizeof(uint16_t) * 6; }
 const char *const clnd_dns_packet::pbuf() { return (char *)this; }
 
 clnd_dns_packet * clnd_dns_packet::dns_resp_packet(string &buf, dns_rcode rcode, uint16_t ancount) const {
@@ -134,7 +134,11 @@ bool clnd_dns_packet::get_is_authoritative() const
 void clnd_dns_packet::set_is_authoritative(bool auth)
 {
     uint16_t _h_flag = ntohs(flags_);
-    _h_flag |= 0x0400;
+    if ( auth ) {
+        _h_flag |= 0x0400;
+    } else {
+        _h_flag &= 0xFBFF;
+    }
     flags_ = htons(_h_flag);
 }
 bool clnd_dns_packet::get_is_truncation() const
@@ -150,7 +154,11 @@ bool clnd_dns_packet::get_is_recursive_desired() const
 void clnd_dns_packet::set_is_recursive_desired(bool rd)
 {
     uint16_t _h_flag = ntohs(flags_);
-    _h_flag |= 0x0100;
+    if ( rd ) {
+        _h_flag |= 0x0100;
+    } else {
+        _h_flag &= 0xFEFF;
+    }
     flags_ = htons(_h_flag);
 }
 bool clnd_dns_packet::get_is_recursive_available() const
@@ -1171,7 +1179,19 @@ bool sl_poller::monitor_socket( SOCKET_T so, bool oneshot, SL_EVENT_ID eid, bool
 	}
 	if ( -1 == epoll_ctl( m_fd, _op, so, &_ee ) ) {
 		lerror << "failed to monitor the socket " << so << ": " << ::strerror(errno) << lend;
-		return false;
+		if ( errno == EEXIST ) {
+			if ( -1 == epoll_ctl( m_fd, EPOLL_CTL_MOD, so, &_ee ) ) {
+				lerror << "failed to monitor the socket " << so << ": " << ::strerror(errno) << lend;
+				return false;
+			}
+		} else if ( errno == ENOENT ) {
+			if ( -1 == epoll_ctl(m_fd, EPOLL_CTL_ADD, so, &_ee ) ) {
+				lerror << "failed to monitor the socket " << so << ": " << ::strerror(errno) << lend;
+				return false;
+			}
+		} else {
+			return false;
+		}
 	}
 #elif SL_TARGET_MAC
 	struct kevent _ke;
@@ -1959,7 +1979,7 @@ void _sl_tcp_socket_on_write(sl_event e) {
         if ( sl_events::server().has_handler(e.so, SL_EVENT_READ) ) {
             _eid |= SL_EVENT_READ;
         }
-        sl_poller::server().monitor_socket(e.so, true, (SL_EVENT_ID)_eid);
+        sl_poller::server().monitor_socket(e.so, true, (SL_EVENT_ID)_eid, true);
     } while ( false );
     if ( _sswpkt->callback ) _sswpkt->callback(e);
 }
@@ -1998,7 +2018,7 @@ bool sl_tcp_socket_send(SOCKET_T tso, const string &pkt, sl_socket_event_handler
     if ( sl_events::server().has_handler(tso, SL_EVENT_READ) ) {
         _eid |= SL_EVENT_READ;
     }
-    sl_poller::server().monitor_socket(tso, true, (SL_EVENT_ID)_eid);
+    sl_poller::server().monitor_socket(tso, true, (SL_EVENT_ID)_eid, true);
 
     return true;
 }
