@@ -622,7 +622,11 @@ int main( int argc, char *argv[] ) {
 			linfo 
                 << "the incoming connection " << _lpi << " want to connect to " 
                 << _orgnl << " via current gateway" << lend;
-
+            if ( !_g_service_config->allow_access_from_ip(_lpi.ipaddress) ) {
+                lwarning << "the incoming connection " << _lpi << " is not allowed, block it." << lend;
+                sl_socket_close(e.so);
+                return;
+            }
             sl_peerinfo _socks5 = sl_peerinfo::nan();
             // Search for dns cache
             if ( _g_service_config->is_ip_in_a_record_cache(_orgnl.ipaddress) ) {
