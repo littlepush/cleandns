@@ -96,40 +96,33 @@ int main(int argc, char * argv[])
         linfo << "quit update filter tool" << lend;
     });
 
-    SOCKET_T _ft = sl_tcp_socket_init();
-    if ( !sl_tcp_socket_connect(_ft, _si, [&_oss](sl_event e){
-        if ( e.event == SL_EVENT_FAILED ) {
+    sl_tcp_socket_connect(sl_peerinfo::nan(), _si.ipaddress, _si.port_number, 3, [&_oss](sl_event e){
+        if ( e.event == SL_EVENT_FAILED || e.event == SL_EVENT_TIMEOUT ) {
             lerror << "failed to connect to the server" << lend;
             __g_thread_mutex().unlock();
             return;
         }
-        if ( !sl_tcp_socket_send(e.so, _oss.str()) ) {
+        sl_events::server().append_handler(e.so, SL_EVENT_FAILED | SL_EVENT_TIMEOUT, [=](sl_event e) {
             __g_thread_mutex().unlock();
-            return;
-        }
-        if ( !sl_tcp_socket_monitor(e.so, [](sl_event e){
-            if ( e.event == SL_EVENT_FAILED ) {
+        });
+
+        sl_tcp_socket_send(e.so, _oss.str(), [=](sl_event e) {
+            sl_socket_monitor(e.so, 3, [=](sl_event e) {
+                string _resp;
+                if ( !sl_tcp_socket_read(e.so, _resp) ) {
+                    __g_thread_mutex().unlock();
+                    return;
+                }
+                if ( _resp == "{\"errno\":0}" ) {
+                    lnotice << "success to update the filter" << lend;
+                } else {
+                    lerror << _resp << lend;
+                }
                 __g_thread_mutex().unlock();
-                return;
-            }
-            string _resp;
-            if ( !sl_tcp_socket_read(e.so, _resp) ) {
-                __g_thread_mutex().unlock();
-                return;
-            }
-            if ( _resp == "{\"errno\":0}" ) {
-                lnotice << "success to update the filter" << lend;
-            } else {
-                lerror << _resp << lend;
-            }
-            __g_thread_mutex().unlock();
-        })) {
-            __g_thread_mutex().unlock();
-            return;
-        }
-    })) {
-        __g_thread_mutex().unlock();
-    }
+            });
+        });
+    });
+
     return 0;
 }
 

@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc4-2-g286e645
+// Current Version: 0.6-rc5-2-g652515f
 
 #pragma once
 // inc/thread.hpp
@@ -205,7 +205,11 @@ namespace cpputility {
     template < class Item > class event_pool
     {
     public:
-    	typedef function<void(Item&&)>	get_event_t;
+        typedef function<void()>                action_void_t;
+        typedef function<bool(bool)>            action_bool_t;
+    	typedef function<void(Item&&)>	        get_event_t;
+        typedef function<void(const Item&&)>    enum_event_t;
+        typedef function<bool(Item&&)>          find_event_t;
     protected:
     	mutex					mutex_;
     	condition_variable		cv_;
@@ -249,6 +253,22 @@ namespace cpputility {
     		cv_.notify_one();
     	};
 
+        template < typename Container, typename Locker >
+        void notify_lots(const Container &itemList, Locker *locker = NULL, enum_event_t enum_callback = NULL) {
+            unique_lock<mutex> _l(mutex_);
+            if ( locker != NULL ) {
+                locker->lock();
+            }
+            for ( auto && item : itemList ) {
+                pool_.emplace(item);
+                cv_.notify_one();
+                if ( enum_callback ) enum_callback(move(item));
+            }
+            if ( locker != NULL ) {
+                locker->unlock();
+            }
+        }
+
     	void clear() {
     		lock_guard<mutex> _l(mutex_);
     		pool_.clear();
@@ -257,6 +277,20 @@ namespace cpputility {
         size_t size() {
             lock_guard<mutex> _l(mutex_);
             return pool_.size();
+        }
+
+        bool search_pending_event(action_void_t before, find_event_t find_event, action_bool_t after = NULL) {
+            lock_guard<mutex> _l(mutex_);
+            if ( before ) before();
+            bool _search_ret = false;
+            for ( auto &&_item : pool_ ) {
+                if ( find_event(move(_item)) ) {
+                    _search_ret = true;
+                    break;
+                }
+            }
+            if ( after ) _search_ret = after(_search_ret);
+            return _search_ret;
         }
     };
 }
@@ -734,161 +768,6 @@ namespace cpputility
 
 #endif
 
-// inc/dns.h
-#ifndef __CLEAN_DNS_DNS_PACKAGE_H__
-#define __CLEAN_DNS_DNS_PACKAGE_H__
-
-#define SOCK_LITE_INTEGRATION_DNS
-
-#include <iostream>
-#include <cstdint>
-#include <string>
-#include <vector>
-#include <algorithm>
-#include <stdio.h>
-#include <memory.h>
-#include <stdlib.h>
-
-using namespace std;
-
-// DNS Question Type
-typedef enum {
-    dns_qtype_host          = 0x01,     // Host(A) record
-    dns_qtype_ns            = 0x02,     // Name server (NS) record
-    dns_qtype_cname         = 0x05,     // Alias(CName) record
-    dns_qtype_ptr           = 0x0C,     // Reverse-lookup(PTR) record
-    dns_qtype_mx            = 0x0F,     // Mail exchange(MX) record
-    dns_qtype_srv           = 0x21,     // Service(SRV) record
-    dns_qtype_ixfr          = 0xFB,     // Incremental zone transfer(IXFR) record
-    dns_qtype_axfr          = 0xFC,     // Standard zone transfer(AXFR) record
-    dns_qtype_all           = 0xFF      // All records
-} dns_qtype;
-
-// DNS Question Class
-typedef enum {
-    dns_qclass_in           = 0x0001,   // Represents the IN(internet) question and is normally set to 0x0001
-    dns_qclass_ch           = 0x0003,   // the CHAOS class
-    dns_qclass_hs           = 0x0004    // Hesiod   
-} dns_qclass;
-
-typedef enum {
-    dns_opcode_standard     = 0,
-    dns_opcode_inverse      = 1,
-    dns_opcode_status       = 2,
-    dns_opcode_reserved_3   = 3,    // not use
-    dns_opcode_notify       = 4,        // in RFC 1996
-    dns_opcode_update       = 5         // in RFC 2136
-} dns_opcode;
-
-typedef enum {
-    dns_rcode_noerr             = 0,
-    dns_rcode_format_error      = 1,
-    dns_rcode_server_failure    = 2,
-    dns_rcode_name_error        = 3,
-    dns_rcode_not_impl          = 4,
-    dns_rcode_refuse            = 5,
-    dns_rcode_yxdomain          = 6,
-    dns_rcode_yxrrset           = 7,
-    dns_rcode_nxrrset           = 8,
-    dns_rcode_notauth           = 9,
-    dns_rcode_notzone           = 10,
-    dns_rcode_badvers           = 16,
-    dns_rcode_badsig            = 16,
-    dns_rcode_badkey            = 17,
-    dns_rcode_badtime           = 18,
-    dns_rcode_badmode           = 19,
-    dns_rcode_badname           = 20,
-    dns_rcode_badalg            = 21
-} dns_rcode;
-
-#pragma pack(push, 1)
-class clnd_dns_packet {
-protected:
-    uint16_t        transaction_id_;
-    uint16_t        flags_;
-    uint16_t        qd_count_;
-    uint16_t        an_count_;
-    uint16_t        ns_count_;
-    uint16_t        ar_count_;
-public:
-    // Properties
-    uint16_t        get_transaction_id() const;
-    bool            get_is_query_request() const;
-    bool            get_is_response_request() const;
-    dns_opcode      get_opcode() const;
-    bool            get_is_authoritative() const;
-    void            set_is_authoritative(bool auth = false);
-    bool            get_is_truncation() const;
-    bool            get_is_recursive_desired() const;
-    void            set_is_recursive_desired(bool rd = true);
-    bool            get_is_recursive_available() const;
-    dns_rcode       get_resp_code() const;
-
-    uint16_t        get_qd_count() const;
-    uint16_t        get_an_count() const;
-    uint16_t        get_ns_count() const;
-    uint16_t        get_ar_count() const;
-
-    clnd_dns_packet( bool is_query = true, dns_opcode opcode = dns_opcode_standard, uint16_t qd_count = 1 );
-    clnd_dns_packet( const char *data, uint16_t len );
-    clnd_dns_packet( const clnd_dns_packet &rhs );
-    clnd_dns_packet& operator= (const clnd_dns_packet &rhs );
-
-    // The size of the packet, should always be 12
-    size_t size() const;
-    // The buffer point of the packet
-    const char *const pbuf();
-
-    clnd_dns_packet *dns_resp_packet(string &buf, dns_rcode rcode, uint16_t ancount = 1) const;
-    clnd_dns_packet *dns_truncation_packet( string &buf ) const;
-
-protected:
-    static bool clnd_dns_support_recursive;
-    static uint16_t clnd_dns_tid;
-public:
-    static void set_support_recursive( bool ra = true );
-};
-
-#pragma pack(pop)
-
-// Get the domain from the dns querying packet.
-// The query domain seg will store the domain in the following format:
-// [length:1Byte][component][length:1Byte][component]...
-int dns_get_domain( const char *pkt, unsigned int len, std::string &domain );
-
-// Generate a query packet
-int dns_generate_query_packet( const string &query_name, string& buffer, dns_qtype qtype = dns_qtype_host );
-
-// Generate a tc packet
-int dns_generate_tc_packet( const string& incoming_pkt, string& buffer );
-
-// Generate a tcp redirect packet
-int dns_generate_tcp_redirect_packet( const string &incoming_pkt, string &buffer );
-
-// Generate a udp redirect packet from tcp response
-int dns_generate_udp_response_packet_from_tcp( const string &incoming_pkt, string &buffer );
-
-// Generate the A records response from the received packet
-void dns_generate_a_records_resp( const char *pkt, unsigned int len, vector<uint32_t> ipaddress, string &buf );
-
-// Generate response packet for specified query domain
-void dns_generate_a_records_resp( 
-    const string &query_domain, 
-    uint16_t trans_id, 
-    const vector<uint32_t> & iplist, 
-    string &buf );
-
-// Generate the C Name records response from the received packet
-void dns_gnerate_cname_records_resp( const char *pkt, unsigned int len, vector<string> cnamelist, string &buf );
-
-// Get all available A records from a packet
-void dns_get_a_records( const char *pkt, unsigned int len, string &qdomain, vector<uint32_t> &a_records );
-
-// Check if is a query request
-bool dns_is_query(const char *pkt, unsigned int len);
-
-#endif
-
 // inc/socket.h
 #ifndef __SOCK_LITE_SOCKET_H__
 #define __SOCK_LITE_SOCKET_H__
@@ -1263,6 +1142,165 @@ public:
 
 #endif 
 
+// inc/dns.h
+#ifndef __CLEAN_DNS_DNS_PACKAGE_H__
+#define __CLEAN_DNS_DNS_PACKAGE_H__
+
+#define SOCK_LITE_INTEGRATION_DNS
+
+#include <iostream>
+#include <cstdint>
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <stdio.h>
+#include <memory.h>
+#include <stdlib.h>
+
+using namespace std;
+
+// DNS Question Type
+typedef enum {
+    sl_dns_qtype_host           = 0x01,     // Host(A) record
+    sl_dns_qtype_ns             = 0x02,     // Name server (NS) record
+    sl_dns_qtype_cname          = 0x05,     // Alias(CName) record
+    sl_dns_qtype_ptr            = 0x0C,     // Reverse-lookup(PTR) record
+    sl_dns_qtype_mx             = 0x0F,     // Mail exchange(MX) record
+    sl_dns_qtype_srv            = 0x21,     // Service(SRV) record
+    sl_dns_qtype_ixfr           = 0xFB,     // Incremental zone transfer(IXFR) record
+    sl_dns_qtype_axfr           = 0xFC,     // Standard zone transfer(AXFR) record
+    sl_dns_qtype_all            = 0xFF      // All records
+} sl_dns_qtype;
+
+// DNS Question Class
+typedef enum {
+    sl_dns_qclass_in            = 0x0001,   // Represents the IN(internet) question and is normally set to 0x0001
+    sl_dns_qclass_ch            = 0x0003,   // the CHAOS class
+    sl_dns_qclass_hs            = 0x0004    // Hesiod   
+} sl_dns_qclass;
+
+typedef enum {
+    sl_dns_opcode_standard      = 0,
+    sl_dns_opcode_inverse       = 1,
+    sl_dns_opcode_status        = 2,
+    sl_dns_opcode_reserved_3    = 3,    // not use
+    sl_dns_opcode_notify        = 4,        // in RFC 1996
+    sl_dns_opcode_update        = 5         // in RFC 2136
+} sl_dns_opcode;
+
+typedef enum {
+    sl_dns_rcode_noerr              = 0,
+    sl_dns_rcode_format_error       = 1,
+    sl_dns_rcode_server_failure     = 2,
+    sl_dns_rcode_name_error         = 3,
+    sl_dns_rcode_not_impl           = 4,
+    sl_dns_rcode_refuse             = 5,
+    sl_dns_rcode_yxdomain           = 6,
+    sl_dns_rcode_yxrrset            = 7,
+    sl_dns_rcode_nxrrset            = 8,
+    sl_dns_rcode_notauth            = 9,
+    sl_dns_rcode_notzone            = 10,
+    sl_dns_rcode_badvers            = 16,
+    sl_dns_rcode_badsig             = 16,
+    sl_dns_rcode_badkey             = 17,
+    sl_dns_rcode_badtime            = 18,
+    sl_dns_rcode_badmode            = 19,
+    sl_dns_rcode_badname            = 20,
+    sl_dns_rcode_badalg             = 21
+} sl_dns_rcode;
+
+#pragma pack(push, 1)
+class sl_dns_packet {
+
+    enum { packet_header_size = sizeof(uint16_t) * 6 };
+protected:
+    string          packet_data_;
+public:
+    // Properties
+
+    // Trans-Action ID
+    uint16_t        get_transaction_id() const;
+    void            set_transaction_id(uint16_t tid);
+
+    // Request Type
+    bool            get_is_query_request() const;
+    bool            get_is_response_request() const;
+    void            set_is_query_request(bool isqr = true);
+
+    // Operator Code
+    sl_dns_opcode   get_opcode() const;
+    void            set_opcode(sl_dns_opcode opcode = sl_dns_opcode_standard);
+
+    // If this is an authoritative answer
+    bool            get_is_authoritative() const;
+    void            set_is_authoritative(bool auth = false);
+
+    // If current packet is truncation
+    bool            get_is_truncation() const;
+    void            set_is_truncation(bool trunc = true);
+
+    // If the request need recursive query.
+    bool            get_is_recursive_desired() const;
+    void            set_is_recursive_desired(bool rd = true);
+
+    // If current server support recursive query
+    bool            get_is_recursive_available() const;
+    void            set_is_recursive_available(bool recursive = true);
+
+    // Get the response code
+    sl_dns_rcode    get_resp_code() const;
+    void            set_resp_code(sl_dns_rcode rcode = sl_dns_rcode_noerr);
+
+    uint16_t        get_qd_count() const;
+    uint16_t        get_an_count() const;
+    uint16_t        get_ns_count() const;
+    uint16_t        get_ar_count() const;
+
+    // Constructures
+    sl_dns_packet();
+    sl_dns_packet(const sl_dns_packet& rhs);
+    sl_dns_packet(const sl_dns_packet&& rrhs);
+    sl_dns_packet(const string& packet, bool is_tcp_packet = false);
+    sl_dns_packet(uint16_t trans_id, const string& query_domain);
+
+    // Operators
+    sl_dns_packet& operator = (const sl_dns_packet& rhs);
+    sl_dns_packet& operator = (const sl_dns_packet&& rhs);
+
+    // Parse the query domain
+    // The query domain seg will store the domain in the following format:
+    // [length:1Byte][component][length:1Byte][component]...
+    const string get_query_domain() const;
+    // This method will auto increase the packet size
+    void set_query_domain(const string& domain, sl_dns_qtype qtype = sl_dns_qtype_host, sl_dns_qclass qclass = sl_dns_qclass_in);
+
+    // Dump all A-Records in the dns packet
+    const vector<sl_ip> get_A_records() const;
+    // Add a records to the end of the dns packet
+    void set_A_records(const vector<sl_ip> & a_records);
+
+    // Dump all C-Name Records in the dns packet
+    const vector<string> get_C_Names() const;
+    // Append C-Name to the end of the dns packet
+    void set_C_Names(const vector<string> & c_names);
+
+    // The size of the packet
+    size_t size() const;
+    // The buffer point of the packet
+    const char *const pbuf();
+
+    // Cast to string
+    operator const string&() const;
+    const string& str() const;
+
+    // Convert current packet to tcp packet
+    const string to_tcp_packet() const;
+};
+
+#pragma pack(pop)
+
+#endif
+
 // inc/poller.h
 #ifndef __SOCK_LITE_POLLER_H__
 #define __SOCK_LITE_POLLER_H__
@@ -1279,6 +1317,7 @@ public:
 
 #include <vector>
 #include <map>
+#include <unordered_map>
 
 #define CO_MAX_SO_EVENTS		1024
 
@@ -1290,11 +1329,28 @@ enum SL_EVENT_ID {
     SL_EVENT_FAILED         = 0x04,
     SL_EVENT_CONNECT        = 0x08,
     SL_EVENT_WRITE          = 0x08,     // Write and connect is the same
+    SL_EVENT_TIMEOUT        = 0x10,
 
     SL_EVENT_DEFAULT        = (SL_EVENT_ACCEPT | SL_EVENT_DATA | SL_EVENT_FAILED),
     SL_EVENT_ALL            = 0x1F
 };
 
+// Convert the EVENT_ID to string
+const string sl_event_name(uint32_t eid);
+
+/*
+    The event structure for a system epoll/kqueue to set the info
+    of a socket event.
+
+    @so: the socket you should act some operator on it.
+    @source: the tcp listening socket which accept current so, 
+        in udp socket or other events of tcp socket, source will
+        be an INVALIDATE_SOCKET
+    @event: the event current socket get.
+    @socktype: IPPROTO_TCP or IPPROTO_UDP
+    @address: the address info of a udp socket when it gets some
+        incoming data, otherwise it will be undefined.
+*/
 typedef struct tag_sl_event {
     SOCKET_T                so;
     SOCKET_T                source;
@@ -1303,9 +1359,28 @@ typedef struct tag_sl_event {
     struct sockaddr_in      address;    // For UDP socket usage.
 } sl_event;
 
+/*
+    Output of the event
+    The format will be:
+        "event SL_EVENT_xxx SL_EVENT_xxx for xxx socket <so>"
+*/
+ostream & operator << (ostream &os, const sl_event & e);
+
+// Create a failed or timedout event structure object
+sl_event sl_event_make_failed(SOCKET_T so = INVALIDATE_SOCKET);
+sl_event sl_event_make_timeout(SOCKET_T so = INVALIDATE_SOCKET);
+
+/*
+    Epoll|Kqueue Manager Class
+    The class is a singleton class, the whole system should only
+    create one epoll|kqueue file descriptor to monitor all sockets
+    or file descriptors
+
+*/
 class sl_poller
 {
 public:
+    // Event list type.
 	typedef std::vector<sl_event>	earray;
 protected:
 	int 				m_fd;
@@ -1315,20 +1390,21 @@ protected:
 	struct kevent		*m_events;
 #endif
 
-	std::map<SOCKET_T, bool>	m_tcp_svr_map;
-	std::map<SOCKET_T, bool>	m_udp_svr_map;
+    // TCP Listening Socket Map
+	unordered_map<SOCKET_T, bool>       m_tcp_svr_map;
 
-    bool                m_runloop_status;
-    int                 m_runloop_ret;
+    // Timeout Info
+    unordered_map<SOCKET_T, time_t>     m_timeout_map;
+    mutex                               m_timeout_mutex;
 
 protected:
+    // Cannot create a poller object, it should be a Singleton instance
 	sl_poller();
 public:
 	~sl_poller();
         
 	// Bind the server side socket
 	bool bind_tcp_server( SOCKET_T so );
-	bool bind_udp_server( SOCKET_T so );
 
 	// Try to fetch new events(Only return SL_EVENT_DEFAULT)
 	size_t fetch_events( earray &events,  unsigned int timedout = 1000 );
@@ -1336,7 +1412,13 @@ public:
 	// Start to monitor a socket hander
 	// In default, the poller will maintain the socket infinite, if
 	// `oneshot` is true, then will add the ONESHOT flag
-	bool monitor_socket( SOCKET_T so, bool oneshot = false, SL_EVENT_ID eid = SL_EVENT_DEFAULT, bool isreset = false );
+    // Default time out of a socket in epoll/kqueue will be 30 seconds
+	bool monitor_socket(  
+        SOCKET_T so, 
+        bool oneshot = false, 
+        uint32_t eid = SL_EVENT_DEFAULT, 
+        uint32_t timedout = 30 
+    );
 
 	// Singleton Poller Item
 	static sl_poller &server();
@@ -1348,6 +1430,7 @@ public:
 #ifndef __SOCK_LITE_EVENTS_H__
 #define __SOCK_LITE_EVENTS_H__
 
+#include <unordered_map>
 
 // The socket event handler
 //typedef void (*sl_socket_event_handler)(sl_event);
@@ -1362,62 +1445,126 @@ typedef struct tag_sl_handler_set {
     sl_socket_event_handler         on_data;
     sl_socket_event_handler         on_failed;
     sl_socket_event_handler         on_write;
+    sl_socket_event_handler         on_timedout;
 } sl_handler_set;
 
+/*
+    Event Run Loop Class
+    This class is a singleton. It will fetch the Poller every 
+    <timespice> milleseconds.
+
+    The class has at least one worker thread, and will auto increase
+    or decrease according to the pending unprocessed events.
+*/
 class sl_events
 {
 public:
-    // Return an empty handler set
-    static sl_handler_set empty_handler();
-    typedef map<SOCKET_T, sl_handler_set>   shsmap_t;       // SOCKET_HANDLER_SET_MAP_TYPE
-protected:
-    mutable mutex           handler_mutex_;
-    shsmap_t                event_map_;
+    typedef union {
+        struct {
+            uint32_t    timeout;
+            uint32_t    eventid;
+        } flags;
+        uint64_t        event_info;
+    } event_mask;
 
+    // Return an empty handler set 
+    static sl_handler_set empty_handler();
+
+    // Socket Handler Set Map Type
+    typedef map<SOCKET_T, sl_handler_set>       shsmap_t;
+
+    // Socket Event Mask Map Type
+    typedef unordered_map<SOCKET_T, event_mask> semmap_t;
+
+protected:
     // Protected constructure
     sl_events();
 
+    // Any action associates with the events or event handler
+    // need to lock this mutex.
+    mutable mutex           handler_mutex_;
+    // Any validate socket need to bind en empty handler set to
+    // sl_events, this map is used to store the relation between
+    // a socket fd and a handler set.
+    shsmap_t                handler_map_;
+
+    // Any action associates with the event mask need to lock this mutex
+    mutable mutex           event_mutex_;
+    // Before monitor, before fetching, and after fetching, 
+    // will re-order this map for all monitoring events.
+    semmap_t                event_unprocessed_map_;
+    semmap_t                event_unfetching_map_;
+
     // Internal Run Loop Properties.
+    // Change of time piece and runloop callback should lock this
+    // mutex at the first line
     mutable mutex           running_lock_;
+    // Fetching Epoll/Kqueue's timeout setting
     uint32_t                timepiece_;
+    // Callback method after each fetching action.
     sl_runloop_callback     rl_callback_;
 
-    // Running status
-    bool                    is_running_;
+    // Internal Runloop Working Thread.
+    // This is the main thread object of Event System.
     thread *                runloop_thread_;
 
     // Manager Thread Info
+    // All pending events are in this pool.
     event_pool<sl_event>    events_pool_;
+    // Working thread poll
     vector<thread*>         thread_pool_;
+    // Working thread monitor manager thread.
     thread *                thread_pool_manager_;
 
+    // Start the Internal Run Loop Thread use the method: _internal_runloop
     void _internal_start_runloop();
+    // The working thread method of the event runloop.
     void _internal_runloop();
 
+    // Add a new worker to the thread pool and fetch pending
+    // event from event_pool_
     void _internal_add_worker();
+    // Remove the last worker from the thread pool
     void _internal_remove_worker();
+    // The worker thread method.
     void _internal_worker();
 
-    sl_handler_set _find_handler(SOCKET_T so);
+    // Replace a hander of a socket's specified Event ID, return the old handler
+    sl_socket_event_handler _replace_handler(SOCKET_T so, uint32_t eid, sl_socket_event_handler h);
+    // Fetch the handler of a socket's specified Event ID, remine the old handler unchanged.
+    sl_socket_event_handler _fetch_handler(SOCKET_T so, SL_EVENT_ID eid);
+    // Check if the socket has the handler of specified Event ID
+    bool _has_handler(SOCKET_T so, SL_EVENT_ID eid);
 public:
+
     ~sl_events();
+
     // return the singleton instance of sl_events
     static sl_events& server();
 
-    unsigned int pending_socket_count();
-
+    // Bind a handler set to a socket
     void bind( SOCKET_T so, sl_handler_set&& hset );
+    // Remove the handler set of a socket
     void unbind( SOCKET_T so );
-    void update_handler( SOCKET_T so, SL_EVENT_ID eid, sl_socket_event_handler&& h);
+    // Update the handler of a specified event id.
+    void update_handler( SOCKET_T so, uint32_t eid, sl_socket_event_handler&& h);
+    // Append a handler to current handler set
+    void append_handler( SOCKET_T so, uint32_t eid, sl_socket_event_handler h);
+    // Check if the socket has specified event id's handler.    
     bool has_handler(SOCKET_T so, SL_EVENT_ID eid);
 
-    bool is_running() const;
-    void run( uint32_t timepiece = 10, sl_runloop_callback cb = NULL );
-    void stop_run();
+    // Monitor the socket for specified event.
+    void monitor(SOCKET_T so, SL_EVENT_ID eid, sl_socket_event_handler handler, uint32_t timedout = 30);
 
+    // Add an event to the socket's pending event pool.
     void add_event(sl_event && e);
+    // Add a tcp socket's event, everything else in sl_event struct will be remined un-defined.
     void add_tcpevent(SOCKET_T so, SL_EVENT_ID eid);
+    // Add a udp socket's event, evenything else in sl_event struct will be remined un-defined.
     void add_udpevent(SOCKET_T so, struct sockaddr_in addr, SL_EVENT_ID eid);
+
+    // Setup the timepiece and callback method.
+    void setup( uint32_t timepiece = 10, sl_runloop_callback cb = NULL );
 };
 
 #endif
@@ -1574,19 +1721,19 @@ using sl_auth_method = function<bool(const string &, const string &)>;
 void sl_socks5_set_supported_method(sl_methods m);
 
 // Hand shake the new connection, if return nomethod, than should close the connection
-sl_methods sl_socks5_handshake_handler(SOCKET_T so);
+sl_methods sl_socks5_handshake_handler(const string &req_pkt, string &resp_pkt);
 
 // Auth the connection by username and password
-bool sl_socks5_auth_by_username(SOCKET_T so, sl_auth_method auth);
+bool sl_socks5_auth_by_username(const string &req_pkt, string &resp_pkt, sl_auth_method auth);
 
 // Try to get the connection info
-bool sl_socks5_get_connect_info(SOCKET_T so, string &addr, uint16_t& port);
+bool sl_socks5_get_connect_info(const string &req_pkt, string &addr, uint16_t& port);
 
 // Failed to connect to peer
-void sl_socks5_failed_connect_to_peer(SOCKET_T so, sl_socks5rep rep);
+void sl_socks5_generate_failed_connect_to_peer(sl_socks5rep rep, string &resp_pkt);
 
 // After connect to peer, send a response to the incoming connection
-void sl_socks5_did_connect_to_peer(SOCKET_T so, uint32_t addr, uint16_t port);
+void sl_socks5_generate_did_connect_to_peer(const sl_peerinfo &peer, string &resp_pkt);
 
 #endif // socklite.socks5.h
 
@@ -1596,130 +1743,283 @@ void sl_socks5_did_connect_to_peer(SOCKET_T so, uint32_t addr, uint16_t port);
 
 
 // Async to get the dns resolve result
-//typedef void (*async_dns_handler)(const vector<sl_ip>& ipaddr);
 typedef std::function<void(const vector<sl_ip> &)>      async_dns_handler;
 
-// Try to get the dns result async
+/*!
+    Try to get the dns result async
+    @Description
+    Use async udp/tcp socket to send a dns query request to the domain name server.
+    If has multiple nameserver set in the system, will try all the sever in order
+    till the first have a no-error response.
+    The method will use a UDP socket at first, if the answer is a TC package, then
+    force to send TCP request to the same server again.
+    If the server does not response after timeout(5s), will try to use the next
+    server in the list.
+    If all server failed to answer the query, then will return 255.255.255.255 
+    as the IP address of the host to query in the result.
+
+    This method will always return an IP address.
+*/
 void sl_async_gethostname(const string& host, async_dns_handler fp);
 
-// Close the socket and release the handler set
+/*
+    Try to get the dns result async via specified name servers
+*/
+void sl_async_gethostname(
+    const string& host, 
+    const vector<sl_peerinfo>& nameserver_list, 
+    async_dns_handler fp
+);
+
+/*
+    Try to get the dns result via specified name servers through a socks5 proxy.
+    THis will force to use tcp connection to the nameserver
+*/
+void sl_async_gethostname(
+    const string& host, 
+    const vector<sl_peerinfo>& nameserver_list, 
+    const sl_peerinfo &socks5, 
+    async_dns_handler fp
+);
+
+// Async to redirect the dns query request.
+typedef std::function<void(const sl_dns_packet&)>       async_dns_redirector;
+
+/*!
+    Redirect a dns query packet to the specified nameserver, and return the 
+    dns response packet from the server.
+    If specified the socks5 proxy, will force to use tcp redirect.
+*/
+void sl_async_redirect_dns_query(
+    const sl_dns_packet & dpkt,
+    const sl_peerinfo &nameserver,
+    const sl_peerinfo &socks5,
+    async_dns_redirector fp
+);
+
+/*
+    Bind Default Failed Handler for a Socket
+
+    @Description
+    Bind the default handler for SL_EVENT_FAILED of a socket.
+    In any case if the socket receive a SL_EVENT_FAILED event, will
+    invoke this handler.
+    Wether set this handler or not, system will close the socket
+    automatically. Which means, if you receive a SL_EVENT_FAILED
+    event, the socket assigned in the sl_event structure has
+    already been closed.
+*/
+void sl_socket_bind_event_failed(SOCKET_T so, sl_socket_event_handler handler);
+
+/*
+    Bind Default TimedOut Handler for a Socket
+
+    @Description
+    Bind the default timedout handler for SL_EVENT_TIMEOUT of a socket.
+    If a socket receive a timedout event, the system will invoke this
+    handler.
+    If not bind this handler, system will close the socket automatically,
+    otherwise, a timedout socket will NOT be closed.
+*/
+void sl_socket_bind_event_timeout(SOCKET_T so, sl_socket_event_handler handler);
+
+/*!
+    Close the socket and release the handler set 
+
+    @Description
+    This method will close the socket(udp or tcp) and release all cache/buffer
+    associalate with it.
+*/
 void sl_socket_close(SOCKET_T so);
 
-// TCP Methods
-SOCKET_T sl_tcp_socket_init();
-// Async connect to the peer
-bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& peer, sl_socket_event_handler callback);
-// Async connect to the host via a socks5 proxy
-bool sl_tcp_socket_connect(SOCKET_T tso, const sl_peerinfo& socks5, const string& host, uint16_t port, sl_socket_event_handler callback);
-bool sl_tcp_socket_send(SOCKET_T tso, const string &pkt, sl_socket_event_handler callback = NULL);
-bool sl_tcp_socket_monitor(SOCKET_T tso, sl_socket_event_handler callback, bool new_incoming = false);
-bool sl_tcp_socket_read(SOCKET_T tso, string& buffer, size_t max_buffer_size = 4098);
-bool sl_tcp_socket_listen(SOCKET_T tso, const sl_peerinfo& bind_port, sl_socket_event_handler accept_callback);
+/*
+    Monitor the socket for incoming data.
+
+    @Description
+    As reading action will block current thread if there is no data right now,
+    this method will add an EPOLLIN(Linux)/EVFILT_READ(BSD) event to the queue.
+
+    In Linux, as epoll will combine read and write flag in one set, this method
+    will always monitor both EPOLLIN and EPOLLOUT.
+    For a BSD based system use kqueue, will only add a EVFILT_READ to the queue.
+*/
+void sl_socket_monitor(
+    SOCKET_T tso, 
+    uint32_t timedout,
+    sl_socket_event_handler callback
+);
+
+/*
+    Async connect to the host via a socks5 proxy
+
+    @Description
+    Connect to host:port via a socks5 proxy.
+    If the socks5 proxy is not set(like sl_peerinfo::nan()), will try to
+    connect to the host in directly connection.
+    If the host is not an sl_ip, then will invoke <sl_async_gethostname>
+    to resolve the host first.
+
+    If the host is connected syncized, this method will add a SL_EVENT_CONNECT
+    to the events runloop and the caller will be noticed at the next
+    timepiece.
+
+    The default timeout time is 30 seconds(30000ms).
+*/
+void sl_tcp_socket_connect(
+    const sl_peerinfo& socks5, 
+    const string& host, 
+    uint16_t port,
+    uint32_t timedout,
+    sl_socket_event_handler callback
+);
+
+/*
+    Async send a packet to the peer via current socket.
+
+    @Description
+    This method will append the packet to the write queue of the socket,
+    then check if current socket is writing or not.
+    If is now writing, the method will return directly. Otherwise,
+    this method will make the socket to monitor SL_EVENT_WRITE.
+
+    In Linux, this method will always monitor both EPOLLIN and EPOLLOUT
+*/
+void sl_tcp_socket_send(
+    SOCKET_T tso, 
+    const string &pkt, 
+    sl_socket_event_handler callback = NULL
+);
+
+/*
+    Read incoming data from the socket.
+
+    @Description
+    This is a block method to read data from the socket.
+    
+    The socket must be NON_BLOCKING. This method will use a loop
+    to fetch all data on the socket till two conditions:
+    1. the buffer is not full after current recv action
+    2. receive a EAGAIN or EWOULDBLOCK signal
+
+    The method will increase the buffer's size after each loop 
+    until reach the max size of string, which should be the size
+    of machine memory in default.
+*/
+bool sl_tcp_socket_read(
+    SOCKET_T tso, 
+    string& buffer, 
+    size_t min_buffer_size = 1024   // 1K
+);
+
+/*
+    Listen on a tcp port
+
+    @Description
+    Listen on a specified tcp port on sepcified interface.
+    The bind_port is the listen port info of the method.
+    If you want to listen on port 4040 on all interface, set 
+    <bind_port> as "0.0.0.0:4040" or sl_peerinfo(INADDR_ANY, 4040).
+    If you want to listen only the internal network, like 192.168.1.0/24
+    set the <bind_port> like "192.168.1.1:4040"
+
+    The accept callback will return a new incoming socket, which
+    has not been monited on any event.
+*/
+SOCKET_T sl_tcp_socket_listen(
+    const sl_peerinfo& bind_port, 
+    sl_socket_event_handler accept_callback
+);
+
+/*
+    Get original peer info of a socket.
+
+    @Description
+    This method will return the original connect peerinfo of a socket
+    in Linux with iptables redirect by fetch the info with SO_ORIGINAL_DST
+    flag.
+
+    In a BSD(like Mac OS X), will return 0.0.0.0:0
+*/
 sl_peerinfo sl_tcp_get_original_dest(SOCKET_T tso);
 
+/*
+    Redirect a socket's data to another peer via socks5 proxy.
+
+    @Description
+    This method will continuously redirect the data between from_so and the 
+    peer side socket. 
+    When one side close or drop the connection, this method will close
+    both side's sockets.
+*/
+void sl_tcp_socket_redirect(
+    SOCKET_T from_so,
+    const sl_peerinfo& peer,
+    const sl_peerinfo& socks5
+);
+
 // UDP Methods
-SOCKET_T sl_udp_socket_init(const sl_peerinfo& bind_addr = sl_peerinfo::nan());
-bool sl_udp_socket_send(SOCKET_T uso, const string &pkt, const sl_peerinfo& peer);
-bool sl_udp_socket_monitor(SOCKET_T uso, const sl_peerinfo& peer, sl_socket_event_handler callback);
-bool sl_udp_socket_read(SOCKET_T uso, struct sockaddr_in addr, string& buffer, size_t max_buffer_size = 512);
-bool sl_udp_socket_listen(SOCKET_T uso, sl_socket_event_handler accept_callback);
+
+/*
+    Initialize a UDP socket
+
+    @Description
+    This method will create a UDP socket and bind to the <bind_addr>
+    The ipaddress in bind_addr should always be INADDR_ANY.
+
+    As the UDP socket is connectionless, if you want to receive any
+    data on specified port, you must set the port at this time.
+
+    In order to get the local infomation of the udp socket,
+    the method will bind port 0 to this socket in default.
+*/
+SOCKET_T sl_udp_socket_init(
+    const sl_peerinfo& bind_addr = sl_peerinfo::nan(),
+    sl_socket_event_handler failed = NULL, 
+    sl_socket_event_handler timedout = NULL
+);
+
+/*
+    Send packet to the peer.
+
+    @Description
+    This method is an async send method.
+    It will push the packet to the end of the write queue and 
+    try to monitor the SL_EVENT_WRITE flag of the socket.
+*/
+void sl_udp_socket_send(
+    SOCKET_T uso,
+    const sl_peerinfo& peer,
+    const string &pkt,
+    sl_socket_event_handler callback = NULL
+);
+
+/*
+    Listen on a UDP port and wait for any incoming data.
+
+    @Description
+    As a UDP socket is connectionless, the only different between
+    listen and monitor is 'listen' will auto re-monitor the socket
+    after a data incoming message has been processed.
+*/
+void sl_udp_socket_listen(
+    SOCKET_T uso, 
+    sl_socket_event_handler accept_callback
+);
+
+/*
+    Block and read data from the UDP socket.
+
+    @Description
+    Same as tcp socket read method.
+*/
+bool sl_udp_socket_read(
+    SOCKET_T uso, 
+    struct sockaddr_in addr, 
+    string& buffer, 
+    size_t min_buffer_size = 512
+);
 
 #endif 
-
-// inc/tcpsocket.h
-#ifndef __SOCK_LITE_TCPSOCKET_H__
-#define __SOCK_LITE_TCPSOCKET_H__
-
-
-// Tcp socket for clean dns use.
-class sl_tcpsocket : public sl_socket
-{
-protected:
-    bool m_is_connected_to_proxy;
-
-    // Internal connect to peer
-    bool _internal_connect( uint32_t inaddr, uint32_t port, uint32_t timeout = 1000 );
-    bool _internal_connect( const string &ipaddr, uint32_t port, uint32_t timeout = 1000 );
-public:
-    sl_tcpsocket(bool iswrapper = false);
-	sl_tcpsocket(SOCKET_T so, bool iswrapper = true);
-    virtual ~sl_tcpsocket();
-
-    // Set up a socks5 proxy.
-    bool setup_proxy( const string &socks5_addr, uint32_t socks5_port );
-	bool setup_proxy( const string &socks5_addr, uint32_t socks5_port,
-			const string &username, const string &password);
-    // Connect to peer
-    virtual bool connect( const uint32_t inaddr, uint32_t port, uint32_t timeout = 1000 );
-    virtual bool connect( const sl_ip& ip, uint32_t port, uint32_t timeout = 1000 );
-    virtual bool connect( const sl_peerinfo &peer, uint32_t timeout = 1000 );
-    virtual bool connect( const string &ipaddr, uint32_t port, uint32_t timeout = 1000 );
-
-    // Add current socket to the async monitor, current sl_socket
-    // will be set to wrapper automatically.9
-    virtual void monitor();
-
-    // Listen on specified port and address, default is 0.0.0.0
-    virtual bool listen( uint32_t port, uint32_t ipaddr = INADDR_ANY );
-
-    // Try to get the original destination, this method now only work under linux
-    bool get_original_dest( string &address, uint32_t &port );
-
-    // Read data from the socket until timeout or get any data.
-    virtual SO_READ_STATUE read_data( string &buffer, uint32_t timeout = 1000 );
-
-	// Only try to read data once, the socket must receive SL_EVENT_DATA by the poller
-	SO_READ_STATUE recv(string &buffer, unsigned int max_buffer_len = 512);
-
-    // Write data to peer.
-    virtual bool write_data( const string &data );
-};
-
-#endif
-
-// inc/udpsocket.h
-#ifndef __SOCK_LITE_UDPSOCKET_H__
-#define __SOCK_LITE_UDPSOCKET_H__
-
-
-// UDP socket
-class sl_udpsocket : public sl_socket
-{
-public:
-    struct sockaddr_in m_sock_addr;
-
-    sl_udpsocket(bool iswrapper = false);
-    sl_udpsocket(SOCKET_T so);
-    sl_udpsocket(SOCKET_T so, struct sockaddr_in addr);
-
-    virtual ~sl_udpsocket();
-
-    // The IP Address information for peer socket
-    string & ipaddress( string & ipstr ) const;
-    // The Port of peer socket
-    uint32_t port() const;
-
-    // Connect to peer
-    virtual bool connect( const uint32_t inaddr, uint32_t port, uint32_t timeout = 1000 );
-    virtual bool connect( const sl_ip& ip, uint32_t port, uint32_t timeout = 1000 );
-    virtual bool connect( const sl_peerinfo &peer, uint32_t timeout = 1000 );
-    virtual bool connect( const string &ipaddr, uint32_t port, uint32_t timeout = 1000 );
-    // Listen on specified port and address, default is 0.0.0.0
-    virtual bool listen( uint32_t port, uint32_t ipaddr = INADDR_ANY );
-    
-    // Add current socket to the async monitor, current sl_socket
-    // will be set to wrapper automatically.9
-    virtual void monitor();
-
-    // Read data from the socket until timeout or get any data.
-    virtual SO_READ_STATUE read_data( string &buffer, uint32_t timeout = 1000 );
-    // Only try to read data once, the socket must receive SL_EVENT_DATA by the poller
-    SO_READ_STATUE recv(string &buffer, unsigned int max_buffer_len = 512);
-    // Write data to peer.
-    virtual bool write_data( const string &data );
-};
-
-#endif
 
 // sock.lite.h
 
