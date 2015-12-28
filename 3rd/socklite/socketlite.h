@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc5-4-gd47a5e7
+// Current Version: 0.6-rc5-6-geff30d5
 
 #pragma once
 // inc/thread.hpp
@@ -1794,6 +1794,7 @@ void sl_async_redirect_dns_query(
     const sl_dns_packet & dpkt,
     const sl_peerinfo &nameserver,
     const sl_peerinfo &socks5,
+    bool force_tcp,
     async_dns_redirector fp
 );
 

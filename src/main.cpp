@@ -291,7 +291,7 @@ int main( int argc, char *argv[] ) {
                     }
                 }
                 else {
-                    sl_async_redirect_dns_query(_dpkt, _f->parent, _f->socks5, [=](const sl_dns_packet &rpkt){
+                    sl_async_redirect_dns_query(_dpkt, _f->parent, _f->socks5, true, [=](const sl_dns_packet &rpkt){
                         vector<sl_ip> _a_records(move(rpkt.get_A_records()));
                         for ( auto &_ip : _a_records ) {
                             linfo << "R:[" << _f->parent << "] D:[" << _domain << "] A:[" << _ip << "]" << lend;
@@ -299,6 +299,9 @@ int main( int argc, char *argv[] ) {
                                 _g_service_config->add_a_record_cache(_ip);
                             }
                         }
+                        sl_tcp_socket_send(e.so, rpkt.to_tcp_packet(), [=](sl_event e) {
+                            sl_socket_close(e.so);
+                        });
                     });
                 }
             });
@@ -349,7 +352,7 @@ int main( int argc, char *argv[] ) {
                 }
             } 
             else {
-                sl_async_redirect_dns_query(_dpkt, _f->parent, _f->socks5, [=](const sl_dns_packet &rpkt){
+                sl_async_redirect_dns_query(_dpkt, _f->parent, _f->socks5, false, [=](const sl_dns_packet &rpkt){
                     vector<sl_ip> _a_records(move(rpkt.get_A_records()));
                     for ( auto &_ip : _a_records ) {
                         linfo << "R:[" << _f->parent << "] D:[" << _domain << "] A:[" << _ip << "]" << lend;
@@ -357,6 +360,7 @@ int main( int argc, char *argv[] ) {
                             _g_service_config->add_a_record_cache(_ip);
                         }
                     }
+                    sl_udp_socket_send(e.so, sl_peerinfo(e.address.sin_addr.s_addr, ntohs(e.address.sin_port)), rpkt);
                 });
             }
         });

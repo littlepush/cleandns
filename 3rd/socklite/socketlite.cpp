@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc5-4-gd47a5e7
+// Current Version: 0.6-rc5-6-geff30d5
 
 #include "socketlite.h"
 // src/socket.cpp
@@ -3207,6 +3207,7 @@ void sl_async_redirect_dns_query(
     const sl_dns_packet & dpkt,
     const sl_peerinfo &nameserver,
     const sl_peerinfo &socks5,
+    bool force_tcp,
     async_dns_redirector fp
 )
 {
@@ -3217,32 +3218,33 @@ void sl_async_redirect_dns_query(
         _dpkt.set_resp_code(sl_dns_rcode_server_failure);
         if ( fp ) fp(_dpkt);
     };
-    if ( socks5 ) {
-        sl_tcp_socket_connect(socks5, nameserver.ipaddress, nameserver.port_number, 1000, [=](sl_event e) {
+    if ( socks5 || force_tcp ) {
+        sl_tcp_socket_connect(socks5, nameserver.ipaddress, nameserver.port_number, 5, [=](sl_event e) {
             if ( e.event != SL_EVENT_CONNECT ) {
                 // Failed
                 _errorfp();
                 return;
             }
-
+            sl_events::server().append_handler(e.so, SL_EVENT_FAILED | SL_EVENT_TIMEOUT, [=](sl_event e) {
+                _errorfp();
+            });
             sl_tcp_socket_send(e.so, dpkt.to_tcp_packet(), [=](sl_event e) {
-                string _rpkt;
-                if ( !sl_tcp_socket_read(e.so, _rpkt) ) {
+                sl_socket_monitor(e.so, 5, [=](sl_event e) {
+                    string _rpkt;
+                    if ( !sl_tcp_socket_read(e.so, _rpkt) ) {
+                        sl_socket_close(e.so);
+                        _errorfp();
+                        return;
+                    }
                     sl_socket_close(e.so);
-                    _errorfp();
-                    return;
-                }
-                sl_socket_close(e.so);
-                sl_dns_packet _dpkt(_rpkt);
-                if ( fp ) fp(_dpkt);
+                    sl_dns_packet _dpkt(_rpkt, true);
+                    if ( fp ) fp(_dpkt);
+                });
             });
         });
     } else {
         SOCKET_T _uso = sl_udp_socket_init();
-        sl_events::server().append_handler(_uso, SL_EVENT_FAILED, [=](sl_event e) {
-            _errorfp();
-        });
-        sl_events::server().append_handler(_uso, SL_EVENT_TIMEOUT, [=](sl_event e) {
+        sl_events::server().append_handler(_uso, SL_EVENT_FAILED | SL_EVENT_TIMEOUT, [=](sl_event e) {
             _errorfp();
         });
         sl_udp_socket_send(_uso, nameserver, dpkt, [=](sl_event e) {
