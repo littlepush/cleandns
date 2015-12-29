@@ -104,13 +104,13 @@ AfterMake :
 	@mv -vf $(CLRD_ROOT)/cleandns $(OUT_DIR)/bin/cleandns
 	@mv -vf $(CLRD_ROOT)/upfilter $(OUT_DIR)/bin/upfilter
 
-debug : PreProcess $(STATIC_LIBS) $(DYNAMIC_LIBS) $(EXECUTABLE) $(TEST_CASE) AfterMake
+debug : PreProcess $(STATIC_LIBS) $(DYNAMIC_LIBS) $(EXECUTABLE) $(TEST_CASE) $(RELAY_OBJECT) AfterMake
 	@exit 0
 
-release : PreProcess $(STATIC_LIBS) $(DYNAMIC_LIBS) $(EXECUTABLE) $(TEST_CASE) AfterMake
+release : PreProcess $(STATIC_LIBS) $(DYNAMIC_LIBS) $(EXECUTABLE) $(TEST_CASE) $(RELAY_OBJECT) AfterMake
 	@exit 0
 
-withpg : PreProcess $(STATIC_LIBS) $(DYNAMIC_LIBS) $(EXECUTABLE) $(TEST_CASE) AfterMake
+withpg : PreProcess $(STATIC_LIBS) $(DYNAMIC_LIBS) $(EXECUTABLE) $(TEST_CASE) $(RELAY_OBJECT) AfterMake
 	@exit 0
 
 %.o: src/%.cpp 
