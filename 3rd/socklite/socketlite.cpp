@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc5-7-g405a3a8
+// Current Version: 0.6-rc5-8-gdfb9275
 
 #include "socketlite.h"
 // src/socket.cpp
@@ -1499,7 +1499,9 @@ void sl_events::_internal_runloop()
                 if ( _eit->second.flags.eventid == 0 ) continue;    // the socket is still alve, but not active.
                 auto _epit = event_unprocessed_map_.find(_eit->first);
                 if ( _epit == end(event_unprocessed_map_) ) continue;
-                //linfo << "re-monitor on socket " << _eit->first << " for event " << sl_event_name(_eit->second.flags.eventid) << lend;
+                #if DEBUG
+                ldebug << "re-monitor on socket " << _eit->first << " for event " << sl_event_name(_eit->second.flags.eventid) << lend;
+                #endif
                 sl_poller::server().monitor_socket(_eit->first, true, _eit->second.flags.eventid, _eit->second.flags.timeout);
             }
         } while ( false );
@@ -1562,7 +1564,9 @@ void sl_events::_internal_worker()
     sl_socket_event_handler _handler;
     while ( this_thread_is_running() ) {
         if ( !events_pool_.wait_for(milliseconds(10), [&](sl_event&& e){
-            //ldebug << "processing " << e << lend;
+            #if DEBUG
+            ldebug << "processing " << e << lend;
+            #endif
             _local_event = e;
             SOCKET_T _s = ((_local_event.event == SL_EVENT_ACCEPT) && 
                             (_local_event.socktype == IPPROTO_TCP)) ? 
@@ -1706,7 +1710,15 @@ void sl_events::monitor(SOCKET_T so, SL_EVENT_ID eid, sl_socket_event_handler ha
     lock_guard<mutex> _(event_mutex_);
 
     bool _has_event = _has_handler(so, eid);
-    if ( _has_event ) return;
+    if ( _has_event ) {
+        #if DEBUG
+        ldebug 
+            << "socket " << so << " has already pending the handler for event " 
+            << sl_event_name(eid) <<< ", ignore this monitoring request" 
+        << lend;
+        #endif
+        return;
+    }
 
     // Add the mask
     auto _efit = event_unfetching_map_.find(so);
@@ -1729,6 +1741,12 @@ void sl_events::monitor(SOCKET_T so, SL_EVENT_ID eid, sl_socket_event_handler ha
 
     // Update the monitor status
     if ( !sl_poller::server().monitor_socket(so, true, eid, timedout) ) {
+        #if DEBUG
+        ldebug 
+            << "failed to monitor the socket " << so << " for event " 
+            << sl_event_name(eid) << ", add a FAILED event" 
+        << lend;
+        #endif
         events_pool_.notify_one(move(sl_event_make_failed(so)));
     }
 }
