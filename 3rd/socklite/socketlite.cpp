@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc5-8-gdfb9275
+// Current Version: 0.6-rc5-9-gd98800b
 
 #include "socketlite.h"
 // src/socket.cpp
@@ -1714,7 +1714,7 @@ void sl_events::monitor(SOCKET_T so, SL_EVENT_ID eid, sl_socket_event_handler ha
         #if DEBUG
         ldebug 
             << "socket " << so << " has already pending the handler for event " 
-            << sl_event_name(eid) <<< ", ignore this monitoring request" 
+            << sl_event_name(eid) << ", ignore this monitoring request" 
         << lend;
         #endif
         return;
