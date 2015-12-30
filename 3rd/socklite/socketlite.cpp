@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc5-9-gd98800b
+// Current Version: 0.6-rc5-10-gf2198bc
 
 #include "socketlite.h"
 // src/socket.cpp
@@ -2976,7 +2976,7 @@ void sl_udp_socket_listen(
     auto _listen_callback = [=](sl_event e) {
         lerror << "UDP socket " << e.so << " fetch unexcepted event: " << e << lend;
         // Re-monitor
-        sl_udp_socket_listen(e.so, accept_callback);
+        sl_udp_socket_listen(uso, accept_callback);
     };
     // Force to update the failed & timeout handler
     sl_events::server().update_handler(uso, SL_EVENT_FAILED | SL_EVENT_TIMEOUT, _listen_callback);
@@ -2984,7 +2984,10 @@ void sl_udp_socket_listen(
     // Monitor the read event
     sl_socket_monitor(uso, 0, [=](sl_event e) {
         if ( accept_callback ) accept_callback(e);
-        sl_udp_socket_listen(e.so, accept_callback);
+        #if DEBUG
+        ldebug << "after udp socket " << uso << " accept callback, try to re-listen it" << lend;
+        #endif
+        sl_udp_socket_listen(uso, accept_callback);
     });
 }
 
