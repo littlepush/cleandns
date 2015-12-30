@@ -1276,7 +1276,9 @@ size_t sl_poller::fetch_events( sl_poller::earray &events, unsigned int timedout
 	for ( auto _tit = begin(m_timeout_map); _tit != end(m_timeout_map); ++_tit ) {
 		if ( _tit->second > 0 && _tit->second < _now_time ) {
 			_timeout_list.push_back(_tit->first);
-			// ldebug << "socket " << _tit->first << " runs time out in poller" << lend;
+			#if DEBUG
+			ldebug << "socket " << _tit->first << " runs time out in poller" << lend;
+			#endif
 		}
 	}
 
@@ -1358,10 +1360,17 @@ bool sl_poller::monitor_socket(
 
 	lock_guard<mutex> _(m_timeout_mutex);
 	if ( timedout == 0 ) {
-		// ldebug << "socket " << so << " will monitor infinitvie" << lend;
+		#if DEBUG
+		ldebug << "socket " << so << " will monitor infinitvie" << lend;
+		#endif
 		m_timeout_map[so] = 0;
 	} else {
-		//ldebug << "socket " << so << " monitor on event " << sl_event_name(eid) << ", will time out after " << timedout << " seconds" << lend;
+		#if DEBUG
+		ldebug 
+			<< "socket " << so << " monitor on event " << sl_event_name(eid) 
+			<< ", will time out after " << timedout << " seconds" 
+		<< lend;
+		#endif
 		m_timeout_map[so] = (time(NULL) + timedout);
 	}
 	return true;
