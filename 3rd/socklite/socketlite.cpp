@@ -1506,12 +1506,16 @@ void sl_events::_internal_runloop()
             lock_guard<mutex> _(event_mutex_);
             for ( auto _eit = begin(event_unfetching_map_); _eit != end(event_unfetching_map_); ++_eit ) {
                 if ( _eit->second.flags.eventid == 0 ) continue;    // the socket is still alve, but not active.
+                int _re_eid = _eit->second.flags.eventid;
                 auto _epit = event_unprocessed_map_.find(_eit->first);
-                if ( _epit == end(event_unprocessed_map_) ) continue;
+                if ( _epit != end(event_unprocessed_map_) ) {
+                    _re_eid &= (~_epit->second.flags.eventid);
+                }
+                if ( _re_eid == 0 ) continue;
                 #if DEBUG
-                ldebug << "re-monitor on socket " << _eit->first << " for event " << sl_event_name(_eit->second.flags.eventid) << lend;
+                ldebug << "re-monitor on socket " << _eit->first << " for event " << sl_event_name(_re_eid) << lend;
                 #endif
-                sl_poller::server().monitor_socket(_eit->first, true, _eit->second.flags.eventid, _eit->second.flags.timeout);
+                sl_poller::server().monitor_socket(_eit->first, true, _re_eid, _eit->second.flags.timeout);
             }
         } while ( false );
         //ldebug << "current pending events: " << _event_list.size() << lend;
