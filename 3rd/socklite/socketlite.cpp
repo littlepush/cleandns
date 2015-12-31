@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc5-11-gc8dd7c7
+// Current Version: 0.6-rc5-12-g2913b29
 
 #include "socketlite.h"
 // src/socket.cpp
@@ -1718,7 +1718,7 @@ void sl_events::monitor(SOCKET_T so, SL_EVENT_ID eid, sl_socket_event_handler ha
     // Add the mask
     auto _ermit = event_remonitor_map_.find(so);
     if ( _ermit == end(event_remonitor_map_) ) {
-        event_remonitor_map_[so] = {{{0, 0}}, 1};
+        event_remonitor_map_[so] = {{{timedout, eid}}, 1};
     } else {
         if ( _ermit->second.timeout != 0 ) {
             if ( timedout == 0 ) {

@@ -308,6 +308,8 @@ int main( int argc, char *argv[] ) {
         }) ) _system_error = true;
     }
 
+	sl_events::server().setup(50, NULL);
+
     if ( _g_service_config->service_protocol & clnd_protocol_udp ) {
         SOCKET_T _so = sl_udp_socket_init(sl_peerinfo(INADDR_ANY, _g_service_config->port));
         sl_udp_socket_listen(_so, [&](sl_event e){
