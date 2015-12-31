@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc5-12-g2913b29
+// Current Version: 0.6-rc5-15-g6dbae48
 
 #pragma once
 // inc/thread.hpp
@@ -1419,6 +1419,12 @@ public:
         uint32_t eid = SL_EVENT_DEFAULT, 
         uint32_t timedout = 30 
     );
+
+    /*
+        When close a socket, remove the socket from the
+        timeout map. The socket will auto be removed from epoll/kqueue.
+    */
+    void unmonitor_socket(SOCKET_T so);
 
 	// Singleton Poller Item
 	static sl_poller &server();

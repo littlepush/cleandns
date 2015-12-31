@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc5-12-g2913b29
+// Current Version: 0.6-rc5-15-g6dbae48
 
 #include "socketlite.h"
 // src/socket.cpp
@@ -1376,6 +1376,11 @@ bool sl_poller::monitor_socket(
 	return true;
 }
 
+void sl_poller::unmonitor_socket(SOCKET_T so) {
+	lock_guard<mutex> _(m_timeout_mutex);
+	m_timeout_map.erase(so);
+}
+
 sl_poller &sl_poller::server() {
 	static sl_poller _g_poller;
 	return _g_poller;
@@ -1530,7 +1535,12 @@ void sl_events::_internal_runloop()
         size_t _ecount = sl_poller::server().fetch_events(_event_list, _tp);
         if ( _ecount != 0 ) {
             //ldebug << "fetch some events, will process them" << lend;
-            events_pool_.notify_lots(_event_list, &event_mutex_);
+            events_pool_.notify_lots(_event_list, &event_mutex_, [this](const sl_event&& e){
+                if ( e.event != SL_EVENT_WRITE && e.event != SL_EVENT_DATA ) return;
+                auto _ermit = event_remonitor_map_.find(e.so);
+                if ( _ermit == end(event_remonitor_map_) ) return;
+                _ermit->second.unsaved = 0;
+            });
         }
         // Invoke the callback
         if ( _fp != NULL ) {
@@ -1655,6 +1665,7 @@ void sl_events::unbind( SOCKET_T so )
     lock_guard<mutex> _el(event_mutex_);
     handler_map_.erase(so);
     event_remonitor_map_.erase(so);
+    sl_poller::server().unmonitor_socket(so);
 }
 void sl_events::update_handler( SOCKET_T so, uint32_t eid, sl_socket_event_handler&& h)
 {
