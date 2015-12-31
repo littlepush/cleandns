@@ -451,7 +451,7 @@ int main( int argc, char *argv[] ) {
 			uint32_t _laddr, _lport;
 			network_peer_info_from_socket(e.so, _laddr, _lport);
 			sl_peerinfo _lpi(_laddr, _lport);
-			linfo 
+			ldebug 
                 << "the incoming connection " << _lpi << " want to connect to " 
                 << _orgnl << " via current gateway" << lend;
             if ( !_g_service_config->allow_access_from_ip(_lpi.ipaddress) ) {
