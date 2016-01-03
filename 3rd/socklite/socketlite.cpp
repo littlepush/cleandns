@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc5-15-g6dbae48
+// Current Version: 0.6-rc5-16-g3c5973a
 
 #include "socketlite.h"
 // src/socket.cpp
@@ -282,7 +282,14 @@ sl_peerinfo::sl_peerinfo(const string &ipstring, uint16_t port)
     format_ += to_string(port_);
 }
 sl_peerinfo::sl_peerinfo(const sl_peerinfo& rhs)
-: ip_(rhs.ip_), port_(rhs.port_), ipaddress(ip_), port_number(port_) { }
+: ip_(rhs.ip_), port_(rhs.port_), format_(rhs.format_), ipaddress(ip_), port_number(port_) { }
+sl_peerinfo::sl_peerinfo(const struct sockaddr_in addr)
+: ip_(addr.sin_addr.s_addr), port_(ntohs(addr.sin_port)), ipaddress(ip_), port_number(port_) 
+{
+    format_ = (const string &)ip_;
+    format_ += ":";
+    format_ += to_string(port_);
+}
 
 sl_peerinfo & sl_peerinfo::operator = (const sl_peerinfo& rhs) {
     ip_ = rhs.ip_;
@@ -586,6 +593,43 @@ sl_dns_packet::sl_dns_packet(uint16_t trans_id, const string& query_domain)
     this->set_is_recursive_desired(true);
     this->set_opcode(sl_dns_opcode_standard);
     this->set_query_domain(query_domain);
+}
+bool sl_dns_packet::is_validate_query() const
+{
+    if ( this->get_is_query_request() == false ) return false;
+    if ( packet_data_.size() > 512 ) return false;
+    // If the request is a query one, minimal size of the packet should be
+    // the header size plus 2bytes Class and 2bytes CType, and some unpsecified
+    // length of querying domain.
+    if ( packet_data_.size() <= (packet_header_size + 4) ) return false;
+    // THe format of a query request shoule be [header][format_domain\0][type][class]
+    if ( packet_data_[packet_data_.size() - 5] != '\0' ) return false;
+    // The QD Count should always be 1
+    if ( this->get_qd_count() != 1 ) return false;
+    // The RCode should always be zero in a query request
+    if ( this->get_resp_code() != sl_dns_rcode_noerr ) return false;
+    // The AN and NS count should be 0
+    if ( this->get_an_count() != 0 || this->get_ns_count() != 0 ) return false;
+    // The AR code should be 0, 1 or 2
+    if ( this->get_ar_count() > 2 ) return false;
+
+    return true;
+}
+bool sl_dns_packet::is_validate_response() const
+{
+    if ( this->get_is_response_request() == false ) return false;
+    // The QD Count should always be 1
+    if ( this->get_qd_count() != 1 ) return false;
+    return true;
+}
+
+sl_dns_packet::operator bool() const
+{
+    if ( this->get_is_query_request() ) {
+        return this->is_validate_query();
+    } else {
+        return this->is_validate_response();
+    }
 }
 
 // Transaction ID

@@ -258,6 +258,14 @@ int main( int argc, char *argv[] ) {
                     return;
                 }
                 sl_dns_packet _dpkt(_incoming_buf, true);
+                if ( !_dpkt.is_validate_query() ) {
+                    lwarning 
+                        << "receive an invalidate dns query packet from " 
+                        << sl_peerinfo(e.address) << lend;
+                    sl_socket_close(e.so);
+                    return;
+                }
+
                 string _domain(move(_dpkt.get_query_domain()));
 
                 // Search a filter
@@ -322,6 +330,12 @@ int main( int argc, char *argv[] ) {
                 return;
             }
             sl_dns_packet _dpkt(_incoming_buf);
+            if ( !_dpkt.is_validate_query() ) {
+                lwarning 
+                    << "receive an invalidate dns query packet from " 
+                    << sl_peerinfo(e.address) << lend;
+                return;
+            }
             string _domain(move(_dpkt.get_query_domain()));
             linfo << "the incoming request " << _ipeer << " want to query domain: " << _domain << lend;
 

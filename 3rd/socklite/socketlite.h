@@ -21,7 +21,7 @@
 */
 // This is an amalgamate file for socketlite
 
-// Current Version: 0.6-rc5-15-g6dbae48
+// Current Version: 0.6-rc5-16-g3c5973a
 
 #pragma once
 // inc/thread.hpp
@@ -1049,6 +1049,7 @@ public:
     sl_peerinfo(const string &format_string);
     sl_peerinfo(const string &ipaddr, uint16_t port);
     sl_peerinfo(const sl_peerinfo& rhs);
+    sl_peerinfo(const struct sockaddr_in addr);
     sl_peerinfo & operator = (const sl_peerinfo& rhs);
     sl_peerinfo & operator = (const string &format_string);
 
@@ -1262,6 +1263,11 @@ public:
     sl_dns_packet(const sl_dns_packet&& rrhs);
     sl_dns_packet(const string& packet, bool is_tcp_packet = false);
     sl_dns_packet(uint16_t trans_id, const string& query_domain);
+
+    // Check if the packet is a validate dns packet
+    operator bool() const;
+    bool is_validate_query() const;
+    bool is_validate_response() const;
 
     // Operators
     sl_dns_packet& operator = (const sl_dns_packet& rhs);
