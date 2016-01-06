@@ -288,6 +288,7 @@ int main( int argc, char *argv[] ) {
                     } else {
                         _rpkt.set_C_Names(_lresult);
                     }
+                    _rpkt.set_is_recursive_available(true);
                     // Send and close
                     sl_tcp_socket_send(e.so, _rpkt.to_tcp_packet(), [=](sl_event e) {
                         sl_socket_close(e.so);
@@ -359,6 +360,7 @@ int main( int argc, char *argv[] ) {
                 } else {
                     _rpkt.set_C_Names(_lresult);
                 }
+                _rpkt.set_is_recursive_available(true);
                 // Send and close
                 sl_udp_socket_send(e.so, sl_peerinfo(e.address.sin_addr.s_addr, ntohs(e.address.sin_port)), _rpkt);
                 // DUMP local result
